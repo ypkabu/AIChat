@@ -1,33 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpen, Brain, Images, Settings, Sparkles } from "lucide-react";
+import { BookOpen, Brain, Images, Library, Settings, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
-  { href: "/", label: "物語", icon: BookOpen },
-  { href: "/memory", label: "メモリ", icon: Brain },
-  { href: "/gallery", label: "画像", icon: Images },
-  { href: "/settings", label: "設定", icon: Settings }
+  { href: "/", label: "物語", icon: BookOpen, active: "home" },
+  { href: "/lorebooks", label: "ロア", icon: Library, active: "lorebooks" },
+  { href: "/memory", label: "メモリ", icon: Brain, active: "memory" },
+  { href: "/gallery", label: "画像", icon: Images, active: "gallery" },
+  { href: "/settings", label: "設定", icon: Settings, active: "settings" }
 ];
 
-export function BottomNav({ active }: { active: "home" | "memory" | "gallery" | "settings" }) {
+export function BottomNav({ active }: { active: "home" | "lorebooks" | "memory" | "gallery" | "settings" }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-canvas/92 px-3 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2 backdrop-blur-xl">
-      <div className="mx-auto grid max-w-md grid-cols-4 gap-1">
+      <div className="mx-auto grid max-w-md grid-cols-5 gap-1">
         {items.map((item) => {
           const Icon = item.icon;
-          const isActive =
-            (active === "home" && item.href === "/") ||
-            (active === "memory" && item.href === "/memory") ||
-            (active === "gallery" && item.href === "/gallery") ||
-            (active === "settings" && item.href === "/settings");
+          const isActive = active === item.active;
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                "grid min-h-12 place-items-center rounded-md px-2 py-1 text-[11px] text-muted",
+                "grid min-h-12 place-items-center rounded-md px-1 py-1 text-[10px] text-muted",
                 isActive && "bg-brand/14 text-brand"
               )}
             >

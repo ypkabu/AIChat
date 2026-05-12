@@ -144,7 +144,13 @@ export const conversationOutputSchema = z.object({
       why: z.string().nullable().optional()
     })
   ).default([]),
-  smartReplies: z.array(z.string().min(1)).max(3).default([]),
+  smartReplies: z.array(z.object({
+    id: z.string().default(() => newId("sr")),
+    label: z.string().min(1),
+    intent: z.string().nullable().optional(),
+    tone: z.string().nullable().optional(),
+    agency: z.string().nullable().optional()
+  })).max(3).default([]),
   needsUserInput: z.boolean().default(true),
   autoContinueAllowed: z.boolean().default(false),
   storyUpdate: z.object({
@@ -264,15 +270,15 @@ export const conversationJsonSchema = {
           label: { type: "string" },
           type: { type: "string", enum: choiceTypeSchema.options },
           effect: relationshipJsonSchema(),
-          intent: { anyOf: [{ type: "string", enum: ["honest","tease","comfort","flirt","affection","observe","silent","dominant","submissive","avoid","action","question","meta","intimate"] }, { type: "null" }] },
-          tone: { anyOf: [{ type: "string", enum: ["casual","sweet","romantic","serious","playful","dark","intimate","comedy","calm","tense"] }, { type: "null" }] },
-          agency: { anyOf: [{ type: "string", enum: ["active","passive","vulnerable","assertive","reserved","supportive","teasing","protective"] }, { type: "null" }] },
-          choiceStyle: { anyOf: [{ type: "string", enum: ["keyword","sentence","short","natural","detailed","action_only","line_only","mixed"] }, { type: "null" }] },
-          progression: { anyOf: [{ type: "string", enum: ["story_forward","relationship","world_lore","character_focus","event_trigger","slow_burn","conflict","recovery"] }, { type: "null" }] },
-          romanceLevel: { anyOf: [{ type: "number" }, { type: "null" }] },
-          intimacyLevel: { anyOf: [{ type: "number" }, { type: "null" }] },
-          riskLevel: { anyOf: [{ type: "string", enum: ["low","medium","high"] }, { type: "null" }] },
-          why: { anyOf: [{ type: "string" }, { type: "null" }] }
+          intent: { type: ["string", "null"], enum: ["honest","tease","comfort","flirt","affection","observe","silent","dominant","submissive","avoid","action","question","meta","intimate", null] },
+          tone: { type: ["string", "null"], enum: ["casual","sweet","romantic","serious","playful","dark","intimate","comedy","calm","tense", null] },
+          agency: { type: ["string", "null"], enum: ["active","passive","vulnerable","assertive","reserved","supportive","teasing","protective", null] },
+          choiceStyle: { type: ["string", "null"], enum: ["keyword","sentence","short","natural","detailed","action_only","line_only","mixed", null] },
+          progression: { type: ["string", "null"], enum: ["story_forward","relationship","world_lore","character_focus","event_trigger","slow_burn","conflict","recovery", null] },
+          romanceLevel: { type: ["number", "null"] },
+          intimacyLevel: { type: ["number", "null"] },
+          riskLevel: { type: ["string", "null"], enum: ["low","medium","high", null] },
+          why: { type: ["string", "null"] }
         }
       }
     },
@@ -280,7 +286,18 @@ export const conversationJsonSchema = {
       type: "array",
       minItems: 0,
       maxItems: 3,
-      items: { type: "string" }
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["id", "label"],
+        properties: {
+          id: { type: "string" },
+          label: { type: "string" },
+          intent: { anyOf: [{ type: "string", enum: ["honest","tease","comfort","flirt","affection","observe","silent","dominant","submissive","avoid","action","question","meta","intimate"] }, { type: "null" }] },
+          tone: { anyOf: [{ type: "string", enum: ["casual","sweet","romantic","serious","playful","dark","intimate","comedy","calm","tense"] }, { type: "null" }] },
+          agency: { anyOf: [{ type: "string", enum: ["active","passive","vulnerable","assertive","reserved","supportive","teasing","protective"] }, { type: "null" }] }
+        }
+      }
     },
     directorUpdate: directorUpdateJsonSchema(),
     continueSuggestion: {

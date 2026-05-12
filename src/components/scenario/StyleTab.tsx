@@ -121,6 +121,21 @@ export function StyleTab({ bundle, onChange }: { bundle: StoryBundle; onChange: 
         <ToggleRow label="キャラのインフォボックスを表示" checked={bundle.style.show_character_info} onChange={(show_character_info) => update({ show_character_info })} />
         <ToggleRow label="自由入力を許可" checked={bundle.style.allow_free_input} onChange={(allow_free_input) => update({ allow_free_input })} />
         <ToggleRow label="AIによる場面進行を許可" checked={bundle.style.allow_ai_scene_progress} onChange={(allow_ai_scene_progress) => update({ allow_ai_scene_progress })} />
+        <ToggleRow label="「続きを見る」ボタンを許可" checked={bundle.style.allow_continue_button ?? true} onChange={(allow_continue_button) => update({ allow_continue_button })} />
+      </section>
+
+      <section className="grid gap-2 rounded-md border border-white/10 bg-panel p-4">
+        <h2 className="text-sm font-semibold">モード最適化</h2>
+        <SelectField
+          label="最適化モード"
+          value={bundle.style.mode_optimization ?? "none"}
+          onChange={(value) => update({ mode_optimization: value as import("@/lib/domain/types").ModeOptimization })}
+          options={[
+            { value: "none", label: "設定しない" },
+            { value: "girlfriend", label: "AI彼女モード" },
+            { value: "story", label: "物語モード" }
+          ]}
+        />
       </section>
 
       <section className="grid gap-3 rounded-md border border-white/10 bg-panel p-4">

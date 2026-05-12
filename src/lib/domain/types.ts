@@ -252,18 +252,49 @@ export type UserProfile = {
   updated_at: string;
 };
 
+export type LorebookEntryType =
+  | "world" | "place" | "organization" | "character_secret"
+  | "item" | "history" | "rule" | "foreshadowing" | "relationship" | "other";
+
 export type LorebookEntry = {
   id: ID;
   scenario_id: ID;
+  lorebook_id?: ID | null;
   title: string;
   content: string;
   keywords: string[];
   importance: number;
   always_include: boolean;
   related_character_ids: ID[];
+  is_hidden?: boolean;
+  hidden_truth?: string;
+  entry_type?: LorebookEntryType;
   created_at: string;
   updated_at: string;
 };
+
+export type Lorebook = {
+  id: ID;
+  user_id: ID;
+  title: string;
+  short_description: string;
+  cover_image_url: string | null;
+  visibility: "private" | "public";
+  entries: LorebookEntry[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type PlotLorebookLink = {
+  id: ID;
+  plot_id: ID;
+  lorebook_id: ID;
+  enabled: boolean;
+  priority: number;
+  created_at: string;
+};
+
+export type ModeOptimization = "none" | "girlfriend" | "story";
 
 export type StyleSettings = {
   id: ID;
@@ -279,6 +310,8 @@ export type StyleSettings = {
   show_character_info: boolean;
   allow_free_input: boolean;
   allow_ai_scene_progress: boolean;
+  allow_continue_button: boolean;
+  mode_optimization: ModeOptimization;
   play_pace_mode: PlayPaceMode;
   auto_advance_message_count: number;
   choice_frequency: ChoiceFrequency;
@@ -321,6 +354,22 @@ export type SuggestedReply = {
   intimacyLevel?: number | null;
   riskLevel?: string | null;
   why?: string | null;
+};
+
+/** Smart Reply（自然文候補）— ユーザー入力欄に挿入するための短文＋メタデータ */
+export type SmartReply = {
+  id: ID;
+  label: string;
+  intent?: ChoiceIntent | null;
+  tone?: ChoiceTone | null;
+  agency?: ChoiceAgency | null;
+};
+
+/** シナリオスコープの preference（global の fallback あり） */
+export type ScopedChoicePreferences = {
+  global: UserChoicePreferences | null;
+  /** key = scenarioId */
+  byScenario: Record<string, UserChoicePreferences>;
 };
 
 export type ChoiceEventRecord = {
@@ -812,6 +861,7 @@ export type StoryBundle = {
   characters: ScenarioCharacter[];
   userProfiles: UserProfile[];
   lorebook: LorebookEntry[];
+  lorebookLinks: PlotLorebookLink[];
   style: StyleSettings;
   intro: IntroSettings;
   storyScenes: StoryScene[];
@@ -824,6 +874,8 @@ export type AppState = {
   characters: ScenarioCharacter[];
   userProfiles: UserProfile[];
   lorebook: LorebookEntry[];
+  lorebooks: Lorebook[];
+  lorebookLinks: PlotLorebookLink[];
   styles: StyleSettings[];
   intros: IntroSettings[];
   sessions: PlaySession[];
@@ -844,6 +896,7 @@ export type AppState = {
   settings: AppSettings;
   choiceEvents: ChoiceEventRecord[];
   choicePreferences: UserChoicePreferences | null;
+  scenarioChoicePreferences: Record<string, UserChoicePreferences>;
   // Scene visual system
   sceneVisualBundles: SceneVisualBundle[];
   sceneVisualVariants: SceneVisualVariant[];

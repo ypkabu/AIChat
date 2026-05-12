@@ -20,6 +20,7 @@ export type PromptBuildInput = {
   session: PlaySession;
   relationships: RelationshipState[];
   lorebook: LorebookEntry[];
+  linkedLorebookEntries?: LorebookEntry[];
   memories: Memory[];
   recentMessages: Message[];
   latestUserInput: string;
@@ -62,7 +63,12 @@ export function buildConversationPrompt(input: PromptBuildInput): PromptBuildRes
   const currentSceneCharacterIds = getCurrentSceneCharacterIds(bundle, session, recentMessages);
   const currentSceneCharacters = bundle.characters.filter((character) => currentSceneCharacterIds.includes(character.id));
   const currentSceneKeywords = buildCurrentSceneKeywords(currentScene, currentBeat, currentSceneCharacters, latestUserPrompt, recentMessages);
-  const selectedLore = selectRelevantLore(input.lorebook, currentSceneKeywords, maxLoreItems);
+  // シナリオ専用ロア + 連動ロアブックのエントリーを結合（hidden_truth は除外してから渡す）
+  const allLoreEntries = [
+    ...input.lorebook,
+    ...(input.linkedLorebookEntries ?? []).map((e) => ({ ...e, hidden_truth: "" }))
+  ];
+  const selectedLore = selectRelevantLore(allLoreEntries, currentSceneKeywords, maxLoreItems);
   const selectedMemories = selectRelevantMemories(input.memories, currentSceneKeywords, currentSceneCharacters, maxMemoryItems, session.id);
   const recentPromptMessages = recentMessages.slice(-maxRecentMessages);
   const selectedSummaries = selectRecentSummaries(input.storySummaries ?? [], session.id);
@@ -175,7 +181,13 @@ export function buildConversationPrompt(input: PromptBuildInput): PromptBuildRes
     ...buildOptionalSection("Info Box: キャラ状態", infoBoxCharacters),
     ...buildOptionalSection(
       "関連ロアブック",
-      selectedLore.map((lore) => `- ${lore.title}: ${shorten(lore.content, lore.always_include ? 1200 : 260)}`)
+      selectedLore.map((lore) => {
+        const typeLabel = lore.entry_type && lore.entry_type !== "other" ? ` [${lore.entry_type}]` : "";
+        const prefix = `- ${lore.title}${typeLabel}`;
+        // hidden エントリーは content のみ投入（hidden_truth は絶対に含めない）
+        const body = lore.is_hidden ? shorten(lore.content, 400) : shorten(lore.content, lore.always_include ? 1200 : 360);
+        return `${prefix}: ${body}`;
+      })
     ),
     ...buildOptionalSection(
       "関連伏線",
@@ -525,7 +537,8 @@ function selectRelevantLore(lorebook: LorebookEntry[], contextKeywords: string, 
     .filter(({ matched }) => matched)
     .sort((a, b) => b.score - a.score)
     .slice(0, maxItems)
-    .map(({ entry }) => entry);
+    // hidden_truth は絶対にプロンプトに含めない
+    .map(({ entry }) => ({ ...entry, hidden_truth: "" }));
 }
 
 const MEMORY_TYPE_BONUS: Partial<Record<string, number>> = {

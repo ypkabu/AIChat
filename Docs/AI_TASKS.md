@@ -217,3 +217,28 @@
 
 - [ ] Smart Reply 選択時のメタデータ追跡（Smart Reply は string[] のため metadata なし - 将来課題）。
 - [ ] scenario / character スコープの choicePreferences 実装（現在は global スコープのみ）。
+
+## ロアブック・プロット UI 再設計 (2026-05-12)
+
+- [x] supabase/migrations/20260512210000_add_lorebook_system.sql: lorebooks / lorebook_entries 拡張 / plot_lorebook_links / style_settings 拡張 (allow_continue_button / mode_optimization) migration 作成。
+- [x] domain/types.ts: LorebookEntryType 型追加。LorebookEntry に lorebook_id / is_hidden / hidden_truth / entry_type 追加。Lorebook / PlotLorebookLink 型新規追加。StyleSettings に allow_continue_button / mode_optimization 追加。StoryBundle に lorebookLinks 追加。AppState に lorebooks / lorebookLinks 追加。
+- [x] sampleData.ts: createDefaultStyle に allow_continue_button / mode_optimization デフォルト追加。createSampleState に lorebooks / lorebookLinks 追加。
+- [x] repository.ts: loadAppStateFromSupabase に lorebooks / lorebookLinks の空配列追加。
+- [x] AppStore.tsx: getBundle に lorebookLinks 追加。saveBundle に lorebookLinks 同期追加。normalizeState に lorebooks / lorebookLinks / StyleSettings 新フィールド正規化追加。AppStoreValue に lorebook CRUD メソッド追加（listLorebooks / createLorebook / saveLorebook / deleteLorebook / addLorebookLink / removeLorebookLink / toggleLorebookLink）。getLinkedLorebookEntries ヘルパー追加。sendTurn / continueAutoTurn / sendSilentContinue に linkedLorebookEntries 追加。
+- [x] components/lorebook/LorebookListScreen.tsx: 新規作成。ロアブック一覧、新規作成、削除 UI。
+- [x] components/lorebook/LorebookEditor.tsx: 新規作成。タブ式（ロア情報/項目/設定）。LorebookEntry CRUD（種別/キーワード/内容/重要度/always_include/is_hidden/hidden_truth）。
+- [x] app/lorebooks/page.tsx: 新規作成。
+- [x] app/lorebooks/[lorebookId]/page.tsx: 新規作成。
+- [x] components/scenario/LorebookTab.tsx: 連動ロアブック管理 UI に変更（連動中一覧/追加/enabled トグル/解除/シナリオ専用ロアレガシー維持）。
+- [x] components/scenario/StyleTab.tsx: allow_continue_button トグル / mode_optimization セレクトを追加。
+- [x] components/scenario/PromptTab.tsx: キャラクター上限 5→10 に緩和。
+- [x] components/ui/BottomNav.tsx: ロアブック（Library アイコン）ナビ追加（4→5タブ）。
+- [x] promptBuilder.ts: PromptBuildInput に linkedLorebookEntries 追加。selectRelevantLore でシナリオ専用 + 連動ロアを結合。hidden_truth を絶対にプロンプトから除外。entry_type ラベルを lore セクションに追加。
+- [x] tsc / next build ともにエラーなし。
+
+## 後続課題 (ロアブックシステム)
+
+- [ ] Supabase に 20260512210000 マイグレーションを適用する。
+- [ ] repository.ts で lorebooks / lorebook_entries(lorebook_id) / plot_lorebook_links の実DB CRUD を実装（現在はローカルステートのみ）。
+- [ ] ロアブックのカバー画像アップロードを実装する（現在 cover_image_url は手入力のみ）。
+- [ ] ロアブック連動時のエントリーキーワードマッチングを実機でテストする。

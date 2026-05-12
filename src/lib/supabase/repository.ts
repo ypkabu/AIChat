@@ -231,6 +231,8 @@ export async function loadAppStateFromSupabase(user: User): Promise<AppState | n
       .reverse()
       .map(fromDbChoiceEvent),
     choicePreferences: fromDbChoicePreferences(choicePreferencesResult.data ?? null),
+    lorebooks: [],
+    lorebookLinks: [],
     sceneVisualBundles: [],
     sceneVisualVariants: [],
     sessionSceneVisualStates: []
@@ -325,8 +327,12 @@ export async function saveAppStateToSupabase(state: AppState, user: User) {
     if (normalized.choicePreferences) {
       await upsert(TABLES.choicePreferences, toDbChoicePreferences(normalized.choicePreferences, user.id));
     }
-  } catch {
-    // migration 未適用時のフォールバック
+  } catch (error) {
+    // テーブル未適用 (42P01 / relation does not exist) のみ許容、それ以外は警告
+    const msg = error instanceof Error ? error.message : String(error);
+    if (!msg.includes("does not exist") && !msg.includes("42P01")) {
+      console.warn("[ChoiceLearning] Sync failed (not a missing-table error)", error);
+    }
   }
 
   async function upsert(table: string, row: Record<string, unknown>) {
@@ -625,7 +631,7 @@ function fromDbChoiceEvent(row: Record<string, unknown>): ChoiceEventRecord {
     scenarioId: String(row.scenario_id ?? ""),
     characterId: row.character_id ? String(row.character_id) : null,
     choiceLabel: String(row.choice_label ?? ""),
-    choiceType: (row.choice_type ?? "neutral") as ChoiceEventRecord["choiceType"],
+    choiceType: (row.choice_type ?? "talk") as ChoiceEventRecord["choiceType"],
     intent: (row.intent ?? null) as ChoiceEventRecord["intent"],
     tone: (row.tone ?? null) as ChoiceEventRecord["tone"],
     agency: (row.agency ?? null) as ChoiceEventRecord["agency"],

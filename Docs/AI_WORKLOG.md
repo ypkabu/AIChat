@@ -1,5 +1,65 @@
 # AI Worklog
 
+## 2026-05-12 (4回目)
+
+### ロアブック・プロット UI 再設計実装
+
+#### 概要
+スタンドアロン Lorebook システム（再利用可能なロアブック）とプロット連動機能を実装。
+
+#### 実装内容
+
+**DB Migration** (`20260512210000_add_lorebook_system.sql`):
+- `lorebooks` テーブル新規作成（user_id / title / short_description / cover_image_url / visibility / RLS付き）
+- `lorebook_entries` 拡張: lorebook_id / is_hidden / hidden_truth / entry_type カラム追加
+- `plot_lorebook_links` テーブル新規作成（plot_id ↔ lorebook_id / enabled / priority / RLS付き）
+- `style_settings` 拡張: allow_continue_button / mode_optimization カラム追加
+
+**型定義** (`domain/types.ts`):
+- `LorebookEntryType` union型追加（world/place/organization/character_secret/item/history/rule/foreshadowing/relationship/other）
+- `LorebookEntry` に lorebook_id / is_hidden / hidden_truth / entry_type 追加
+- `Lorebook` / `PlotLorebookLink` 型新規追加
+- `StyleSettings` に allow_continue_button / mode_optimization 追加
+- `StoryBundle` に lorebookLinks 追加。`AppState` に lorebooks / lorebookLinks 追加
+
+**AppStore** (`AppStore.tsx`):
+- `getBundle` / `saveBundle` / `normalizeState` を lorebooks / lorebookLinks 対応に更新
+- lorebook CRUD メソッド追加（listLorebooks / createLorebook / saveLorebook / deleteLorebook / addLorebookLink / removeLorebookLink / toggleLorebookLink）
+- `getLinkedLorebookEntries` ヘルパー追加
+- sendTurn / continueAutoTurn / sendSilentContinue に linkedLorebookEntries を追加
+
+**UI コンポーネント（新規）**:
+- `components/lorebook/LorebookListScreen.tsx` — ロアブック一覧（新規作成/削除）
+- `components/lorebook/LorebookEditor.tsx` — タブ式エディタ（ロア情報/項目/設定）。hidden_truth は is_hidden=true 時のみ表示
+- `app/lorebooks/page.tsx` / `app/lorebooks/[lorebookId]/page.tsx` — Next.js ルート
+
+**既存UI変更**:
+- `LorebookTab.tsx` — 連動ロアブック管理 UI に変更（連動追加/解除/トグル）。シナリオ専用ロア（レガシー）は下部で継続維持
+- `StyleTab.tsx` — allow_continue_button トグル追加。mode_optimization セレクト（設定しない/AI彼女/物語）追加
+- `PromptTab.tsx` — キャラクター上限 5→10
+- `BottomNav.tsx` — ロアブック（Library アイコン）ナビ追加（4→5タブ）
+
+**PromptBuilder** (`promptBuilder.ts`):
+- `PromptBuildInput` に `linkedLorebookEntries` 追加
+- シナリオ専用ロア + 連動ロアブックエントリーを結合して `selectRelevantLore` に渡す
+- `hidden_truth` を `selectRelevantLore` 内で空文字列にクリア（絶対にAIプロンプトに漏らさない）
+- entry_type ラベルをプロンプト出力に追加
+
+#### hidden_truth 非漏洩の保証
+- LorebookEditor: `is_hidden=false` の時は hidden_truth フィールドを非表示
+- PromptBuilder `selectRelevantLore`: 結果エントリーの `hidden_truth` を `""` に上書きしてから返す
+- AppStore `getLinkedLorebookEntries`: 呼び出し元（promptBuilder）で除外される
+
+#### 未実装
+- Supabase 実 DB への lorebooks / plot_lorebook_links の CRUD（現在はローカルステートのみ。migration は作成済み）
+- カバー画像アップロード（URL 手入力のみ）
+
+#### ビルド確認
+- `tsc --noEmit`: エラーなし
+- `next build`: `/lorebooks` / `/lorebooks/[lorebookId]` が出力、全14ルート正常
+
+---
+
 ## 2026-05-12 (3回目)
 
 ### Choice Preference Learning 強化実装

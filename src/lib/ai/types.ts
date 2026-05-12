@@ -17,6 +17,7 @@ import type {
   SessionCharacterState,
   SessionEnvironmentState,
   Sensitivity,
+  SmartReply,
   StorySummary,
   StoryBundle,
   SuggestedReply,
@@ -72,7 +73,7 @@ export type ConversationResponse = {
     content: string;
   }>;
   suggestedReplies: SuggestedReply[];
-  smartReplies: string[];
+  smartReplies: SmartReply[];
   needsUserInput: boolean;
   autoContinueAllowed: boolean;
   storyUpdate: {

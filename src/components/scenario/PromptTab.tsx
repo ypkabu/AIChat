@@ -30,7 +30,7 @@ export function PromptTab({ bundle, onChange }: { bundle: StoryBundle; onChange:
   };
 
   const addCharacter = () => {
-    if (bundle.characters.length >= 5) return;
+    if (bundle.characters.length >= 10) return;
     const now = nowIso();
     const id = newId("char");
     onChange({
@@ -83,12 +83,12 @@ export function PromptTab({ bundle, onChange }: { bundle: StoryBundle; onChange:
 
       <section className="grid gap-3 rounded-md border border-white/10 bg-panel p-4">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold">キャラクター {bundle.characters.length}/5</h2>
+          <h2 className="text-sm font-semibold">キャラクター {bundle.characters.length}/10</h2>
           <button
             type="button"
             className="inline-flex min-h-10 items-center gap-2 rounded-md bg-brand px-3 text-sm font-semibold text-canvas disabled:opacity-40"
             onClick={addCharacter}
-            disabled={bundle.characters.length >= 5}
+            disabled={bundle.characters.length >= 10}
           >
             <Plus className="h-4 w-4" aria-hidden />
             追加

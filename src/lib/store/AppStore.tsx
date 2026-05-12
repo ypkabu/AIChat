@@ -103,6 +103,14 @@ type AppStoreValue = {
   deleteMemory: (memoryId: ID) => void;
   resetLocalState: () => void;
   resetChoicePreferences: () => void;
+  // Lorebook methods
+  listLorebooks: () => import("@/lib/domain/types").Lorebook[];
+  createLorebook: () => string;
+  saveLorebook: (lorebook: import("@/lib/domain/types").Lorebook) => void;
+  deleteLorebook: (id: ID) => void;
+  addLorebookLink: (plotId: ID, lorebookId: ID) => void;
+  removeLorebookLink: (linkId: ID) => void;
+  toggleLorebookLink: (linkId: ID, enabled: boolean) => void;
 };
 
 const AppStoreContext = createContext<AppStoreValue | null>(null);
@@ -224,6 +232,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         characters: state.characters.filter((item) => item.scenario_id === scenarioId).sort((a, b) => a.sort_order - b.sort_order),
         userProfiles: state.userProfiles.filter((item) => item.scenario_id === scenarioId),
         lorebook: state.lorebook.filter((item) => item.scenario_id === scenarioId),
+        lorebookLinks: (state.lorebookLinks ?? []).filter((item) => item.plot_id === scenarioId),
         style,
         intro,
         storyScenes: state.storyScenes.filter((item) => item.scenario_id === scenarioId),
@@ -554,6 +563,10 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         ...current.lorebook.filter((item) => item.scenario_id !== bundle.scenario.id),
         ...bundle.lorebook.map((item) => ({ ...item, updated_at: now }))
       ].filter((item, index, array) => array.findIndex((candidate) => candidate.id === item.id) === index),
+      lorebookLinks: [
+        ...(current.lorebookLinks ?? []).filter((item) => item.plot_id !== bundle.scenario.id),
+        ...bundle.lorebookLinks
+      ].filter((item, index, array) => array.findIndex((candidate) => candidate.id === item.id) === index),
       storyScenes: [
         ...current.storyScenes.filter((item) => item.scenario_id !== bundle.scenario.id),
         ...bundle.storyScenes.map((item) => ({ ...item, updated_at: now }))
@@ -757,6 +770,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         selectedChoice,
         relationships: state.relationships.filter((relationship) => relationship.scenario_id === session.scenario_id),
         lorebook: state.lorebook.filter((entry) => entry.scenario_id === session.scenario_id),
+        linkedLorebookEntries: getLinkedLorebookEntries(state, session.scenario_id),
         memories: state.memories.filter((memory) => memory.scenario_id === session.scenario_id),
         storySummaries: state.storySummaries.filter((summary) => summary.session_id === sessionId).slice(-3),
         foreshadowingItems: state.foreshadowingItems.filter(
@@ -980,6 +994,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         selectedChoice: null,
         relationships: state.relationships.filter((relationship) => relationship.scenario_id === session.scenario_id),
         lorebook: state.lorebook.filter((entry) => entry.scenario_id === session.scenario_id),
+        linkedLorebookEntries: getLinkedLorebookEntries(state, session.scenario_id),
         memories: state.memories.filter((memory) => memory.scenario_id === session.scenario_id),
         storySummaries: state.storySummaries.filter((summary) => summary.session_id === sessionId).slice(-3),
         foreshadowingItems: state.foreshadowingItems.filter(
@@ -1220,6 +1235,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         selectedChoice: null,
         relationships: state.relationships.filter((relationship) => relationship.scenario_id === session.scenario_id),
         lorebook: state.lorebook.filter((entry) => entry.scenario_id === session.scenario_id),
+        linkedLorebookEntries: getLinkedLorebookEntries(state, session.scenario_id),
         memories: state.memories.filter((memory) => memory.scenario_id === session.scenario_id),
         storySummaries: state.storySummaries.filter((summary) => summary.session_id === sessionId).slice(-3),
         foreshadowingItems: state.foreshadowingItems.filter(
@@ -2065,6 +2081,77 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     setState((current) => ({ ...current, choiceEvents: [], choicePreferences: null }));
   }, []);
 
+  const listLorebooks = useCallback(() => {
+    return state.lorebooks ?? [];
+  }, [state.lorebooks]);
+
+  const createLorebook = useCallback(() => {
+    const now = nowIso();
+    const id = newId("lore");
+    const lorebook: import("@/lib/domain/types").Lorebook = {
+      id,
+      user_id: state.userId,
+      title: "新しいロアブック",
+      short_description: "",
+      cover_image_url: null,
+      visibility: "private",
+      entries: [],
+      created_at: now,
+      updated_at: now
+    };
+    setState((current) => ({ ...current, lorebooks: [...(current.lorebooks ?? []), lorebook] }));
+    return id;
+  }, [state.userId]);
+
+  const saveLorebook = useCallback((lorebook: import("@/lib/domain/types").Lorebook) => {
+    const now = nowIso();
+    setState((current) => {
+      const existing = current.lorebooks ?? [];
+      const index = existing.findIndex((item) => item.id === lorebook.id);
+      const updated = { ...lorebook, updated_at: now };
+      const next = index === -1 ? [...existing, updated] : existing.map((item) => (item.id === lorebook.id ? updated : item));
+      return { ...current, lorebooks: next };
+    });
+  }, []);
+
+  const deleteLorebook = useCallback((id: ID) => {
+    setState((current) => ({
+      ...current,
+      lorebooks: (current.lorebooks ?? []).filter((item) => item.id !== id),
+      lorebookLinks: (current.lorebookLinks ?? []).filter((item) => item.lorebook_id !== id)
+    }));
+  }, []);
+
+  const addLorebookLink = useCallback((plotId: ID, lorebookId: ID) => {
+    setState((current) => {
+      const links = current.lorebookLinks ?? [];
+      if (links.some((item) => item.plot_id === plotId && item.lorebook_id === lorebookId)) return current;
+      const link: import("@/lib/domain/types").PlotLorebookLink = {
+        id: newId("link"),
+        plot_id: plotId,
+        lorebook_id: lorebookId,
+        enabled: true,
+        priority: links.filter((item) => item.plot_id === plotId).length,
+        created_at: nowIso()
+      };
+      return { ...current, lorebookLinks: [...links, link] };
+    });
+  }, []);
+
+  const removeLorebookLink = useCallback((linkId: ID) => {
+    setState((current) => ({
+      ...current,
+      lorebookLinks: (current.lorebookLinks ?? []).filter((item) => item.id !== linkId)
+    }));
+  }, []);
+
+  const toggleLorebookLink = useCallback((linkId: ID, enabled: boolean) => {
+    setState((current) => ({
+      ...current,
+      lorebookLinks: (current.lorebookLinks ?? []).map((item) => (item.id === linkId ? { ...item, enabled } : item))
+    }));
+  }, []);
+
   const value = useMemo<AppStoreValue>(
     () => ({
       state,
@@ -2098,7 +2185,14 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       updateMemory,
       deleteMemory,
       resetLocalState,
-      resetChoicePreferences
+      resetChoicePreferences,
+      listLorebooks,
+      createLorebook,
+      saveLorebook,
+      deleteLorebook,
+      addLorebookLink,
+      removeLorebookLink,
+      toggleLorebookLink
     }),
     [
       approveMemoryCandidate,
@@ -2132,7 +2226,14 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       state,
       syncRemoteNow,
       updateMemory,
-      updateSettings
+      updateSettings,
+      listLorebooks,
+      createLorebook,
+      saveLorebook,
+      deleteLorebook,
+      addLorebookLink,
+      removeLorebookLink,
+      toggleLorebookLink
     ]
   );
 
@@ -2165,11 +2266,15 @@ function normalizeState(state: AppState): AppState {
     userProfiles: mergeSeededById(fresh.userProfiles, state.userProfiles ?? []),
     lorebook: mergeSeededById(fresh.lorebook, state.lorebook ?? []),
     intros: mergeSeededById(fresh.intros, state.intros ?? []),
+    lorebooks: state.lorebooks ?? [],
+    lorebookLinks: state.lorebookLinks ?? [],
     styles: styles.map((style) => ({
       ...style,
       play_pace_mode: isPlayPaceMode(style.play_pace_mode) ? style.play_pace_mode : "normal",
       auto_advance_message_count: clamp(Number(style.auto_advance_message_count ?? 3), 1, 3),
-      choice_frequency: style.choice_frequency === "high" ? "high" : "normal"
+      choice_frequency: style.choice_frequency === "high" ? "high" : "normal",
+      allow_continue_button: style.allow_continue_button ?? true,
+      mode_optimization: (["none", "girlfriend", "story"] as const).includes(style.mode_optimization as "none") ? style.mode_optimization : "none"
     })),
     sessions: (state.sessions ?? []).map((session) => ({
       ...session,
@@ -3388,8 +3493,8 @@ function computeChoicePreferences(
   const decay = base.sampleCount < 10 ? 0.9 : 0.95;
 
   function addToMap(map: Record<string, number>, key: string | null | undefined): Record<string, number> {
-    if (!key) return map;
     const decayed = Object.fromEntries(Object.entries(map).map(([k, v]) => [k, v * decay]));
+    if (!key) return decayed;
     return { ...decayed, [key]: (decayed[key] ?? 0) + 1 };
   }
 
@@ -3406,4 +3511,17 @@ function computeChoicePreferences(
     sampleCount: base.sampleCount + 1,
     updatedAt: nowIso()
   };
+}
+
+/**
+ * シナリオに連動中の enabled ロアブックのエントリー一覧を取得する。
+ * hidden_truth は呼び出し元で除外する（ここでは渡すだけ）。
+ */
+function getLinkedLorebookEntries(state: AppState, scenarioId: ID): import("@/lib/domain/types").LorebookEntry[] {
+  const links = (state.lorebookLinks ?? []).filter((link) => link.plot_id === scenarioId && link.enabled);
+  const lorebooks = state.lorebooks ?? [];
+  return links.flatMap((link) => {
+    const lb = lorebooks.find((item) => item.id === link.lorebook_id);
+    return lb ? lb.entries : [];
+  });
 }
