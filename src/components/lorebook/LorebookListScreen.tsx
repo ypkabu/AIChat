@@ -102,7 +102,7 @@ export function LorebookListScreen() {
         )}
       </section>
 
-      <BottomNav active="home" />
+      <BottomNav active="lorebooks" />
     </main>
   );
 }

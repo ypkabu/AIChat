@@ -1,5 +1,52 @@
 # AI Worklog
 
+## 2026-05-12 (5回目)
+
+### SmartReply メタデータ追跡 + シナリオスコープ choicePreferences + Lorebook Supabase CRUD + カバー画像アップロード
+
+#### 実装内容
+
+**SmartReply metadata追跡** (`string[]` → `SmartReply[]`):
+- `domain/types.ts`: `SmartReply` 型（id / label / intent / tone / agency）追加
+- `ai/types.ts`: `ConversationResponse.smartReplies: SmartReply[]` に変更
+- `ai/conversation/schema.ts`:
+  - Zod: `z.array(z.object({ id, label, intent, tone, agency })).max(3)` に変更。`id` は `newId("sr")` で自動生成
+  - JSON Schema: `smartReplies.items` をオブジェクト定義に更新（anyOf enum constraints）
+  - `parseConversationJson`: intent/tone/agency を `ChoiceIntent | null` 等にキャスト
+- `AppStore.tsx`: `currentSmartReplies` の型を `SmartReply[]` に変更
+- `ChatScreen.tsx`: `reply` → `reply.label` で表示・draft 挿入、`key={reply.id}` に変更
+
+**シナリオスコープ choicePreferences**:
+- `domain/types.ts`: `ScopedChoicePreferences` 型追加。`AppState.scenarioChoicePreferences: Record<string, UserChoicePreferences>` 追加
+- `sampleData.ts`: `scenarioChoicePreferences: {}` 初期値追加
+- `AppStore.tsx`:
+  - `normalizeState`: `scenarioChoicePreferences: state.scenarioChoicePreferences ?? {}` を追加
+  - `trackChoiceSelection`: グローバル choicePreferences と並行して `scenarioChoicePreferences[scenarioId]` も `computeChoicePreferences` で更新
+  - `resetChoicePreferences`: `scenarioChoicePreferences: {}` も合わせてリセット
+  - sendTurn / continueAutoTurn / sendSilentContinue: `choicePreferences` を `scenarioChoicePreferences[scenarioId] ?? global` にフォールバック切替
+
+**Supabase CRUD (lorebooks / plot_lorebook_links / scenario prefs)**:
+- `repository.ts`:
+  - `TABLES` に `lorebooks` / `lorebookLinks` を追加
+  - `loadAppStateFromSupabase`: lorebooks / lorebookLinks / scenario-scope prefs を Promise.all に追加
+  - `buildLorebooks()`: lorebook_entries の lorebook_id でエントリーを振り分け
+  - `buildScenarioChoicePreferences()`: scope="scenario" の行から `{ scenarioId: prefs }` を生成
+  - `saveAppStateToSupabase`: lorebooks / lorebookLinks を upsert（try/catch でテーブル未適用時はスキップ）
+  - `toDbChoicePreferences`: scope / scenarioId 引数を追加。シナリオ別 prefs を upsert
+  - `deleteMissingRemoteRows`: lorebooks / lorebookLinks の削除同期を追加
+
+**ロアブックカバー画像アップロード**:
+- `storage.ts`: `uploadLorebookCover(file, lorebookId)` 追加（`avatars` バケットの `lorebooks/` サブパス）
+- `LorebookEditor.tsx`:
+  - `Upload` アイコン・`uploadLorebookCover` / `AVATAR_MIME_TYPES` インポート追加
+  - `InfoTab` にカバー画像セクション追加（ファイル選択ボタン・プレビュー・エラー表示）
+
+#### ビルド確認
+- `tsc --noEmit`: エラーなし
+- `next build`: 全14ルート正常
+
+---
+
 ## 2026-05-12 (4回目)
 
 ### ロアブック・プロット UI 再設計実装

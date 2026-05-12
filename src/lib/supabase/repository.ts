@@ -44,7 +44,9 @@ const TABLES = {
   usageLogs: "usage_logs",
   choiceEvents: "choice_events",
   choicePreferences: "user_choice_preferences",
-  generatedAudio: "generated_audio"
+  generatedAudio: "generated_audio",
+  lorebooks: "lorebooks",
+  lorebookLinks: "plot_lorebook_links"
 } as const;
 
 export type SupabaseRemoteState = {
@@ -127,7 +129,10 @@ export async function loadAppStateFromSupabase(user: User): Promise<AppState | n
     galleryItemsResult,
     usageLogsResult,
     choiceEventsResult,
-    choicePreferencesResult
+    choicePreferencesResult,
+    lorebooksResult,
+    lorebookLinksResult,
+    scenarioChoicePreferencesResult
   ] = await Promise.all([
     supabase.from(TABLES.appSettings).select("*").eq("user_id", user.id).maybeSingle(),
     supabase.from(TABLES.scenarios).select("*").eq("user_id", user.id).order("updated_at", { ascending: false }),
@@ -154,7 +159,13 @@ export async function loadAppStateFromSupabase(user: User): Promise<AppState | n
     // Choice Learning — 直近50件のみ取得（計算は AppStore 側で行う）
     supabase.from(TABLES.choiceEvents).select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(50),
     // global スコープの preference を取得
-    supabase.from(TABLES.choicePreferences).select("*").eq("user_id", user.id).eq("scope", "global").maybeSingle()
+    supabase.from(TABLES.choicePreferences).select("*").eq("user_id", user.id).eq("scope", "global").maybeSingle(),
+    // lorebooks (user-level reusable lore)
+    supabase.from(TABLES.lorebooks).select("*").eq("user_id", user.id),
+    // plot_lorebook_links
+    supabase.from(TABLES.lorebookLinks).select("*"),
+    // scenario-scoped choice preferences
+    supabase.from(TABLES.choicePreferences).select("*").eq("user_id", user.id).eq("scope", "scenario")
   ]);
 
   throwFirstError([
@@ -231,8 +242,14 @@ export async function loadAppStateFromSupabase(user: User): Promise<AppState | n
       .reverse()
       .map(fromDbChoiceEvent),
     choicePreferences: fromDbChoicePreferences(choicePreferencesResult.data ?? null),
-    lorebooks: [],
-    lorebookLinks: [],
+    scenarioChoicePreferences: buildScenarioChoicePreferences(
+      (scenarioChoicePreferencesResult.data ?? []) as Array<Record<string, unknown>>
+    ),
+    lorebooks: buildLorebooks(
+      (lorebooksResult.data ?? []) as Array<Record<string, unknown>>,
+      rows(lorebookResult.data)
+    ),
+    lorebookLinks: (lorebookLinksResult.data ?? []) as AppState["lorebookLinks"],
     sceneVisualBundles: [],
     sceneVisualVariants: [],
     sessionSceneVisualStates: []
@@ -325,13 +342,58 @@ export async function saveAppStateToSupabase(state: AppState, user: User) {
   try {
     await upsertMany(TABLES.choiceEvents, normalized.choiceEvents.map((e) => toDbChoiceEvent(e, user.id)));
     if (normalized.choicePreferences) {
-      await upsert(TABLES.choicePreferences, toDbChoicePreferences(normalized.choicePreferences, user.id));
+      await upsert(TABLES.choicePreferences, toDbChoicePreferences(normalized.choicePreferences, user.id, "global", null));
+    }
+    // scenario-scoped preferences
+    const scenarioPrefs = Object.entries(normalized.scenarioChoicePreferences ?? {});
+    if (scenarioPrefs.length > 0) {
+      await upsertMany(
+        TABLES.choicePreferences,
+        scenarioPrefs.map(([scenarioId, prefs]) => toDbChoicePreferences(prefs, user.id, "scenario", scenarioId))
+      );
     }
   } catch (error) {
     // テーブル未適用 (42P01 / relation does not exist) のみ許容、それ以外は警告
     const msg = error instanceof Error ? error.message : String(error);
     if (!msg.includes("does not exist") && !msg.includes("42P01")) {
       console.warn("[ChoiceLearning] Sync failed (not a missing-table error)", error);
+    }
+  }
+
+  // Lorebooks — テーブル未適用時はエラーを握りつぶす
+  try {
+    const lorebooks = normalized.lorebooks ?? [];
+    if (lorebooks.length > 0) {
+      await upsertMany(TABLES.lorebooks, lorebooks.map((lb) => ({
+        id: lb.id,
+        user_id: user.id,
+        title: lb.title,
+        short_description: lb.short_description ?? null,
+        cover_image_url: lb.cover_image_url ?? null,
+        visibility: lb.visibility ?? "private",
+        created_at: lb.created_at,
+        updated_at: lb.updated_at
+      })));
+      // Lorebook entries (entries belonging to a lorebook, not scenario-embedded)
+      const lorebookEntries = lorebooks.flatMap((lb) =>
+        (lb.entries ?? []).map((entry) => ({
+          ...entry,
+          lorebook_id: lb.id,
+          scenario_id: entry.scenario_id || null  // 空文字列 → null
+        }))
+      );
+      if (lorebookEntries.length > 0) {
+        await upsertMany(TABLES.lorebook, lorebookEntries);
+      }
+    }
+    const lorebookLinks = normalized.lorebookLinks ?? [];
+    if (lorebookLinks.length > 0) {
+      await upsertMany(TABLES.lorebookLinks, lorebookLinks);
+    }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (!msg.includes("does not exist") && !msg.includes("42P01")) {
+      console.warn("[Lorebooks] Sync failed (not a missing-table error)", error);
     }
   }
 
@@ -378,6 +440,34 @@ async function deleteMissingRemoteRows(
   await deleteMissingByUser(supabase, TABLES.userProfiles, userId, collectIds(state.userProfiles));
   await deleteMissingByUser(supabase, TABLES.usageLogs, userId, collectIds(state.usageLogs));
   await deleteMissingByUser(supabase, TABLES.scenarios, userId, scenarioIds);
+
+  // Lorebooks — テーブル未適用時はエラーを握りつぶす
+  try {
+    const lorebooks = state.lorebooks ?? [];
+    const lorebookIds = collectIds(lorebooks);
+    await deleteMissingByUser(supabase, TABLES.lorebooks, userId, lorebookIds);
+
+    // lorebook に属する entries の孤立削除（scenario_id が null のスタンドアロン entries 対応）
+    const allLorebookEntryIds = lorebooks.flatMap((lb) => ((lb as Record<string, unknown>).entries as Array<{ id: string }> ?? []).map((e) => e.id));
+    const lorebookIdList = lorebooks.map((lb) => lb.id);
+    if (lorebookIdList.length > 0) {
+      let entryQuery = supabase.from(TABLES.lorebook).delete().in("lorebook_id", lorebookIdList);
+      entryQuery = filterOutKeptIds(entryQuery, allLorebookEntryIds);
+      const { error } = await entryQuery;
+      if (error) throw error;
+    }
+
+    // plot_lorebook_links は user_id カラムを持たないため、plot_id (= scenario_id) ベースで削除
+    const linkIds = collectIds(state.lorebookLinks ?? []);
+    if (scenarioIds.length > 0) {
+      let query = supabase.from(TABLES.lorebookLinks).delete().in("plot_id", scenarioIds);
+      query = filterOutKeptIds(query, linkIds);
+      const { error } = await query;
+      if (error) throw error;
+    }
+  } catch {
+    // テーブル未適用時はスキップ
+  }
 }
 
 async function deleteMissingByUser(
@@ -682,11 +772,11 @@ function fromDbChoicePreferences(row: Record<string, unknown> | null): UserChoic
   };
 }
 
-function toDbChoicePreferences(prefs: UserChoicePreferences, userId: string): Record<string, unknown> {
+function toDbChoicePreferences(prefs: UserChoicePreferences, userId: string, scope: "global" | "scenario" = "global", scenarioId: string | null = null): Record<string, unknown> {
   return {
     user_id: userId,
-    scope: "global",
-    scenario_id: null,
+    scope,
+    scenario_id: scenarioId,
     character_id: null,
     preferred_intents: prefs.preferredIntents,
     preferred_tones: prefs.preferredTones,
@@ -710,4 +800,44 @@ function asNumber(primary: unknown, fallback: unknown, defaultValue: number) {
   if (typeof primary === "number" && Number.isFinite(primary)) return primary;
   if (typeof fallback === "number" && Number.isFinite(fallback)) return fallback;
   return defaultValue;
+}
+
+// ---------------------------------------------------------------------------
+// Lorebook helpers
+// ---------------------------------------------------------------------------
+
+function buildLorebooks(
+  lorebookRows: Array<Record<string, unknown>>,
+  allEntryRows: Array<Record<string, unknown>>
+): AppState["lorebooks"] {
+  return lorebookRows.map((row) => ({
+    id: String(row.id ?? ""),
+    user_id: String(row.user_id ?? ""),
+    title: String(row.title ?? ""),
+    short_description: row.short_description ? String(row.short_description) : null,
+    cover_image_url: row.cover_image_url ? String(row.cover_image_url) : null,
+    visibility: (row.visibility === "public" ? "public" : "private") as "private" | "public",
+    entries: allEntryRows
+      .filter((e) => e.lorebook_id === row.id)
+      .map((e) => e as unknown as AppState["lorebook"][number]),
+    created_at: String(row.created_at ?? new Date().toISOString()),
+    updated_at: String(row.updated_at ?? new Date().toISOString())
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Scenario-scoped choice preference helpers
+// ---------------------------------------------------------------------------
+
+function buildScenarioChoicePreferences(
+  rows: Array<Record<string, unknown>>
+): Record<string, UserChoicePreferences> {
+  const result: Record<string, UserChoicePreferences> = {};
+  for (const row of rows) {
+    const scenarioId = row.scenario_id ? String(row.scenario_id) : null;
+    if (!scenarioId) continue;
+    const prefs = fromDbChoicePreferences(row);
+    if (prefs) result[scenarioId] = prefs;
+  }
+  return result;
 }

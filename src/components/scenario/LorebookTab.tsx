@@ -8,7 +8,7 @@ import { Field, ToggleRow } from "./formControls";
 import { useAppStore } from "@/lib/store/AppStore";
 
 export function LorebookTab({ bundle, onChange }: { bundle: StoryBundle; onChange: (bundle: StoryBundle) => void }) {
-  const { state, addLorebookLink, removeLorebookLink, toggleLorebookLink } = useAppStore();
+  const { state } = useAppStore();
   const lorebooks = state.lorebooks ?? [];
   const links = bundle.lorebookLinks ?? [];
 
@@ -52,7 +52,6 @@ export function LorebookTab({ bundle, onChange }: { bundle: StoryBundle; onChang
   };
 
   const updateLink = (linkId: string, enabled: boolean) => {
-    toggleLorebookLink(linkId, enabled);
     onChange({
       ...bundle,
       lorebookLinks: bundle.lorebookLinks.map((l) => (l.id === linkId ? { ...l, enabled } : l))
@@ -60,7 +59,6 @@ export function LorebookTab({ bundle, onChange }: { bundle: StoryBundle; onChang
   };
 
   const handleAddLink = (lorebookId: string) => {
-    addLorebookLink(bundle.scenario.id, lorebookId);
     const now = nowIso();
     const newLink: PlotLorebookLink = {
       id: newId("link"),
@@ -74,7 +72,6 @@ export function LorebookTab({ bundle, onChange }: { bundle: StoryBundle; onChang
   };
 
   const handleRemoveLink = (linkId: string) => {
-    removeLorebookLink(linkId);
     onChange({ ...bundle, lorebookLinks: bundle.lorebookLinks.filter((l) => l.id !== linkId) });
   };
 

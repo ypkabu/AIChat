@@ -277,7 +277,7 @@ export type Lorebook = {
   id: ID;
   user_id: ID;
   title: string;
-  short_description: string;
+  short_description: string | null;
   cover_image_url: string | null;
   visibility: "private" | "public";
   entries: LorebookEntry[];

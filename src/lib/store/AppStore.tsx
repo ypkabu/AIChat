@@ -92,7 +92,7 @@ type AppStoreValue = {
   generateImage: (sessionId: ID, prompt: string, triggerType: ImageTriggerType, isNsfwRequested: boolean) => Promise<void>;
   generateSceneBackground: (sessionId: ID, cue: VisualCue, existingBundleId?: ID | null) => Promise<void>;
   generateVoice: (sessionId: ID, messageId: ID, characterId: ID | null, content: string) => Promise<void>;
-  currentSmartReplies: string[];
+  currentSmartReplies: import("@/lib/domain/types").SmartReply[];
   currentContinueSuggestion: ContinueSuggestion | null;
   currentCharacterControl: CharacterControl | null;
   getSessionBackground: (sessionId: ID) => string | null;
@@ -125,7 +125,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     error: null
   });
   const [remoteSaving, setRemoteSaving] = useState(false);
-  const [currentSmartReplies, setCurrentSmartReplies] = useState<string[]>([]);
+  const [currentSmartReplies, setCurrentSmartReplies] = useState<import("@/lib/domain/types").SmartReply[]>([]);
   const [currentContinueSuggestion, setCurrentContinueSuggestion] = useState<ContinueSuggestion | null>(null);
   const [currentCharacterControl, setCurrentCharacterControl] = useState<CharacterControl | null>(null);
   const [sceneGeneratingIds, setSceneGeneratingIds] = useState<Set<ID>>(new Set());
@@ -777,7 +777,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
           (item) => item.scenario_id === session.scenario_id && (!item.session_id || item.session_id === sessionId)
         ),
         usageTotalCostJpy,
-        choicePreferences: state.choicePreferences ?? null
+        choicePreferences: state.scenarioChoicePreferences?.[session.scenario_id] ?? state.choicePreferences ?? null
       };
       let displayedAiMessages = false;
       let aiMessages: Message[] = [];
@@ -1001,7 +1001,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
           (item) => item.scenario_id === session.scenario_id && (!item.session_id || item.session_id === sessionId)
         ),
         usageTotalCostJpy,
-        choicePreferences: state.choicePreferences ?? null
+        choicePreferences: state.scenarioChoicePreferences?.[session.scenario_id] ?? state.choicePreferences ?? null
       };
       let displayedAiMessages = false;
       let aiMessages: Message[] = [];
@@ -1242,7 +1242,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
           (item) => item.scenario_id === session.scenario_id && (!item.session_id || item.session_id === sessionId)
         ),
         usageTotalCostJpy,
-        choicePreferences: state.choicePreferences ?? null
+        choicePreferences: state.scenarioChoicePreferences?.[session.scenario_id] ?? state.choicePreferences ?? null
       };
 
       let displayedAiMessages = false;
@@ -2078,7 +2078,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const resetChoicePreferences = useCallback(() => {
-    setState((current) => ({ ...current, choiceEvents: [], choicePreferences: null }));
+    setState((current) => ({ ...current, choiceEvents: [], choicePreferences: null, scenarioChoicePreferences: {} }));
   }, []);
 
   const listLorebooks = useCallback(() => {
@@ -2346,6 +2346,7 @@ function normalizeState(state: AppState): AppState {
     settings: { ...DEFAULT_SETTINGS, ...state.settings },
     choiceEvents: state.choiceEvents ?? [],
     choicePreferences: state.choicePreferences ?? null,
+    scenarioChoicePreferences: state.scenarioChoicePreferences ?? {},
     sceneVisualBundles: state.sceneVisualBundles ?? [],
     sceneVisualVariants: state.sceneVisualVariants ?? [],
     sessionSceneVisualStates: state.sessionSceneVisualStates ?? [],
@@ -3467,9 +3468,14 @@ function trackChoiceSelection(
     createdAt: nowIso()
   };
   const events = [...(current.choiceEvents ?? []).slice(-49), event];
+  const scenarioPrev = (current.scenarioChoicePreferences ?? {})[scenarioId] ?? null;
   return {
     choiceEvents: events,
-    choicePreferences: computeChoicePreferences(current.choicePreferences ?? null, event)
+    choicePreferences: computeChoicePreferences(current.choicePreferences ?? null, event),
+    scenarioChoicePreferences: {
+      ...(current.scenarioChoicePreferences ?? {}),
+      [scenarioId]: computeChoicePreferences(scenarioPrev, event)
+    }
   };
 }
 

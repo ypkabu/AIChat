@@ -103,6 +103,36 @@ function mimeToExtension(mimeType: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Lorebook cover image upload
+// ---------------------------------------------------------------------------
+
+/**
+ * ロアブックのカバー画像を Supabase Storage の `avatars` バケット（lorebooks/ サブパス）に保存する。
+ */
+export async function uploadLorebookCover(file: File, lorebookId: string): Promise<{ cover_image_url: string | null }> {
+  const error = validateAvatarFile(file);
+  if (error) throw new Error(error);
+
+  const supabase = createBrowserSupabaseClient();
+  const user = supabase ? (await supabase.auth.getUser()).data.user : null;
+  if (!supabase || !user) {
+    return { cover_image_url: await fileToDataUrl(file) };
+  }
+
+  const extension = file.name.split(".").pop()?.toLowerCase() || "webp";
+  const path = `avatars/lorebooks/${lorebookId}/${crypto.randomUUID()}.${extension}`;
+  const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, {
+    cacheControl: "3600",
+    upsert: true,
+    contentType: file.type
+  });
+  if (uploadError) throw uploadError;
+
+  const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+  return { cover_image_url: data.publicUrl };
+}
+
+// ---------------------------------------------------------------------------
 // Voice audio Storage upload
 // ---------------------------------------------------------------------------
 

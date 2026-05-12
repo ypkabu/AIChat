@@ -359,6 +359,7 @@ export function createSampleState(userId = APP_USER_ID): AppState {
     settings: DEFAULT_SETTINGS,
     choiceEvents: [],
     choicePreferences: null,
+    scenarioChoicePreferences: {},
     sceneVisualBundles: [],
     sceneVisualVariants: [],
     sessionSceneVisualStates: []

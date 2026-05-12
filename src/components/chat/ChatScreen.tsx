@@ -590,14 +590,14 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
         )}
         {currentSmartReplies.length > 0 && !busy && !draft && (
           <div className="mx-3 mb-1 flex flex-wrap gap-1.5">
-            {currentSmartReplies.map((reply, index) => (
+            {currentSmartReplies.map((reply) => (
               <button
-                key={index}
+                key={reply.id}
                 type="button"
-                onClick={() => setDraft(reply)}
+                onClick={() => setDraft(reply.label)}
                 className="max-w-full rounded-full border border-white/15 bg-panel px-3 py-1.5 text-left text-xs text-muted transition-colors hover:border-brand/40 hover:text-ink [overflow-wrap:anywhere]"
               >
-                {reply}
+                {reply.label}
               </button>
             ))}
           </div>

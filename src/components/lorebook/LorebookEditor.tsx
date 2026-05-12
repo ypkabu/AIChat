@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Save, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Plus, Save, Trash2, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "@/lib/store/AppStore";
 import type { Lorebook, LorebookEntry, LorebookEntryType } from "@/lib/domain/types";
 import { newId, nowIso, splitTags } from "@/lib/utils";
+import { uploadLorebookCover, AVATAR_MIME_TYPES } from "@/lib/supabase/storage";
 
 const TABS = ["ロア情報", "項目", "設定"] as const;
 type Tab = (typeof TABS)[number];
@@ -117,12 +118,62 @@ export function LorebookEditor({ lorebookId }: { lorebookId: string }) {
 
 // ---- ロア情報タブ ----
 function InfoTab({ lorebook, onChange }: { lorebook: Lorebook; onChange: (lb: Lorebook) => void }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleCoverFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const { cover_image_url } = await uploadLorebookCover(file, lorebook.id);
+      if (cover_image_url) onChange({ ...lorebook, cover_image_url });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "アップロードに失敗しました。");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   return (
     <div className="grid gap-4">
       <section className="grid gap-3 rounded-md border border-white/10 bg-panel p-4">
         <h2 className="text-sm font-semibold">基本情報</h2>
         <LbField label="タイトル *" value={lorebook.title} onChange={(title) => onChange({ ...lorebook, title })} />
-        <LbField label="説明" value={lorebook.short_description} onChange={(short_description) => onChange({ ...lorebook, short_description })} multiline />
+        <LbField label="説明" value={lorebook.short_description ?? ""} onChange={(short_description) => onChange({ ...lorebook, short_description })} multiline />
+      </section>
+
+      <section className="grid gap-3 rounded-md border border-white/10 bg-panel p-4">
+        <h2 className="text-sm font-semibold">カバー画像</h2>
+        {lorebook.cover_image_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={lorebook.cover_image_url}
+            alt="カバー画像"
+            className="h-32 w-full rounded-md object-cover"
+          />
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={AVATAR_MIME_TYPES.join(",")}
+          className="hidden"
+          onChange={handleCoverFile}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="inline-flex min-h-10 items-center gap-2 rounded-md border border-white/15 bg-panel2 px-3 text-sm text-muted disabled:opacity-50"
+        >
+          <Upload className="h-4 w-4" aria-hidden />
+          {uploading ? "アップロード中…" : "画像を選択"}
+        </button>
+        {uploadError && <p className="text-xs text-danger">{uploadError}</p>}
+        <p className="text-xs text-muted">jpg / png / webp、5MB以内</p>
       </section>
     </div>
   );

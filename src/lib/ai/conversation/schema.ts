@@ -373,7 +373,12 @@ export function parseConversationJson(
         progression: (reply.progression ?? null) as ChoiceProgression | null,
         why: reply.why ?? null
       })),
-      smartReplies: parsed.smartReplies ?? [],
+      smartReplies: (parsed.smartReplies ?? []).map((r) => ({
+        ...r,
+        intent: (r.intent ?? null) as ChoiceIntent | null,
+        tone: (r.tone ?? null) as ChoiceTone | null,
+        agency: (r.agency ?? null) as ChoiceAgency | null
+      })),
       needsUserInput: parsed.needsUserInput || mustStopAuto,
       autoContinueAllowed: parsed.autoContinueAllowed && !mustStopAuto,
       continueSuggestion: mustStopAuto

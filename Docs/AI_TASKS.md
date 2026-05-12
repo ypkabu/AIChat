@@ -213,10 +213,25 @@
 - [x] Supabase 同期: repository.ts に choice_events / user_choice_preferences load/save 実装済み。
 - [x] Supabase: 20260512200000 マイグレーション適用済み。
 
-## 後続課題 (Choice Learning)
+## SmartReply メタデータ + シナリオスコープ preferences + Lorebook CRUD (2026-05-12)
 
-- [ ] Smart Reply 選択時のメタデータ追跡（Smart Reply は string[] のため metadata なし - 将来課題）。
-- [ ] scenario / character スコープの choicePreferences 実装（現在は global スコープのみ）。
+- [x] SmartReply 型（id/label/intent/tone/agency）を domain/types.ts に追加。
+- [x] ai/types.ts: `smartReplies: SmartReply[]` に変更。
+- [x] schema.ts: Zod / JSON Schema を SmartReply オブジェクト配列に変更。parseConversationJson でキャスト追加。
+- [x] AppStore.tsx: `currentSmartReplies` の型を `SmartReply[]` に変更。
+- [x] ChatScreen.tsx: `reply.label` で表示・draft挿入に変更。
+- [x] AppState に `scenarioChoicePreferences: Record<string, UserChoicePreferences>` 追加（domain/types.ts）。
+- [x] sampleData.ts / normalizeState に `scenarioChoicePreferences: {}` 初期値追加。
+- [x] trackChoiceSelection でシナリオ別 preferences を並行更新。
+- [x] resetChoicePreferences で `scenarioChoicePreferences: {}` もクリア。
+- [x] sendTurn / continueAutoTurn / sendSilentContinue: `scenarioChoicePreferences[scenarioId] ?? global` フォールバック。
+- [x] repository.ts: scope="scenario" の preferences を load/save に追加（toDbChoicePreferences に scope/scenarioId 引数追加）。
+- [x] repository.ts: TABLES に lorebooks / lorebookLinks 追加。loadAppStateFromSupabase で lorebooks + entries + links + scenario-prefs を取得。buildLorebooks / buildScenarioChoicePreferences ヘルパー追加。
+- [x] repository.ts: saveAppStateToSupabase で lorebooks / entries / lorebookLinks / scenario-prefs を upsert（テーブル未適用時 try/catch スキップ）。
+- [x] repository.ts: deleteMissingRemoteRows で lorebooks / lorebookLinks の削除同期追加。
+- [x] storage.ts: `uploadLorebookCover(file, lorebookId)` 追加（avatars バケット lorebooks/ サブパス）。
+- [x] LorebookEditor.tsx: InfoTab にカバー画像アップロード UI 追加（ファイル選択・プレビュー・エラー表示）。
+- [x] tsc / next build ともにエラーなし。
 
 ## ロアブック・プロット UI 再設計 (2026-05-12)
 
@@ -238,7 +253,5 @@
 
 ## 後続課題 (ロアブックシステム)
 
-- [ ] Supabase に 20260512210000 マイグレーションを適用する。
-- [ ] repository.ts で lorebooks / lorebook_entries(lorebook_id) / plot_lorebook_links の実DB CRUD を実装（現在はローカルステートのみ）。
-- [ ] ロアブックのカバー画像アップロードを実装する（現在 cover_image_url は手入力のみ）。
+- [ ] Supabase に 20260512210000 マイグレーションを適用する（lorebooks / plot_lorebook_links テーブル作成）。
 - [ ] ロアブック連動時のエントリーキーワードマッチングを実機でテストする。
