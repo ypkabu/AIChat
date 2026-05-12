@@ -202,7 +202,18 @@
 - [x] 20260512200000_add_choice_learning.sql: choice_events/user_choice_preferences テーブル migration 作成。
 - [x] tsc / next build ともにエラーなし。
 
+## Choice Preference Learning 強化 (2026-05-12)
+
+- [x] schema.ts: suggestedReplies JSON Schema に anyOf enum 制約追加（intent/tone/agency/choiceStyle/progression/riskLevel → 英語 canonical 値を強制）。
+- [x] schema.ts: `why` フィールド追加（選択肢推薦理由・debug表示用）。
+- [x] domain/types.ts: SuggestedReply に `why?: string | null` 追加。riskLevel を `string | null` に緩める。
+- [x] promptBuilder.ts: buildResponseFormatPrompt に choiceMetaRule（intent/tone/agency/choiceStyle/progression 全フィールド説明 + why 説明 + 配分比率ガイダンス）追加。preference_strength / experience_mode に基づく alignPct 計算（30-65%）。
+- [x] promptBuilder.ts: buildChoicePreferenceSummary 強化（top3 intent / top2 tone / agency / progression / romance score / story-progress score）。alignment-pct 指示を formatPrompt 側に移動。
+- [x] ChoiceButtons.tsx: Debug ON 時に intent/tone/agency/progression + effect deltas (trust/affection/tension) + why を表示。
+- [x] Supabase 同期: repository.ts に choice_events / user_choice_preferences load/save 実装済み。
+- [x] Supabase: 20260512200000 マイグレーション適用済み。
+
 ## 後続課題 (Choice Learning)
 
-- [ ] Supabase に 20260512200000 マイグレーションを適用する。
-- [ ] choice_events / user_choice_preferences の Supabase 同期レイヤーを repository.ts に実装する（現在は localStorage のみ）。
+- [ ] Smart Reply 選択時のメタデータ追跡（Smart Reply は string[] のため metadata なし - 将来課題）。
+- [ ] scenario / character スコープの choicePreferences 実装（現在は global スコープのみ）。

@@ -1,5 +1,37 @@
 # AI Worklog
 
+## 2026-05-12 (3回目)
+
+### Choice Preference Learning 強化実装
+
+#### 問題
+- AIが intent/tone/agency 等に日本語値 (`"関心を示す"`, `"穏やか"`) を返していた
+- 傾向学習のキーが日本語 → preference summary が不安定
+- ChoiceButtons debug に effect/why 表示がなかった
+- 選択肢生成比率ガイダンスがプロンプトに入っていなかった
+
+#### 実装内容
+- `schema.ts`: suggestedReplies JSON Schema を `type: ["string", "null"]` → `anyOf: [{type:"string", enum:[...]}, {type:"null"}]` に変更。intent/tone/agency/choiceStyle/progression/riskLevel に canonical English 値の enum を追加。`why` フィールド (選択肢推薦理由・debug表示用) を新規追加。
+- `domain/types.ts`: `SuggestedReply.why?: string | null` 追加。`riskLevel` を `string | null` に緩める（OpenAI が稀に違反する場合の robustness）。
+- `promptBuilder.ts`:
+  - `buildResponseFormatPrompt` に `choiceMetaRule` 追加: 全メタフィールド説明 + `why` 説明 + `alignPct` ベースの配分比率ガイダンス（strength/experience_mode 連動）
+  - `buildChoicePreferenceSummary` 強化: top3 intent / top2 tone / agency / top2 progression / romance score / story-progress score。alignment-pct 指示を format prompt 側に移動（二重指示を避ける）
+- `ChoiceButtons.tsx`: Debug ON 時に intent/tone/agency/progression + effect deltas (trust/affection/tension) + why を多段表示。通常プレイ時は完全非表示。
+
+#### 選択肢生成比率
+| モード | 好み寄せ | シーン必要 | 意外性/リスク |
+|--------|---------|-----------|------------|
+| strength=low | 30% | 40% | 30% |
+| strength=normal (default) | 45% | 30% | 25% |
+| strength=high | 55% | 25% | 20% |
+| AI彼女+high | 65% | 20% | 15% |
+
+#### 注意
+- Smart Reply は `string[]` のためメタデータ追跡不可（将来課題）
+- scenario/character スコープの choicePreferences は将来課題（現在は global のみ）
+
+---
+
 ## 2026-05-12 (2回目)
 
 ### 3Dモデルパイプライン整理 + Choice Preference Learning 実装
