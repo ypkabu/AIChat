@@ -140,7 +140,8 @@ export const conversationOutputSchema = z.object({
       progression: z.string().nullable().optional(),
       romanceLevel: z.number().int().min(0).max(5).nullable().optional(),
       intimacyLevel: z.number().int().min(0).max(5).nullable().optional(),
-      riskLevel: z.string().nullable().optional()
+      riskLevel: z.string().nullable().optional(),
+      why: z.string().nullable().optional()
     })
   ).default([]),
   smartReplies: z.array(z.string().min(1)).max(3).default([]),
@@ -258,19 +259,20 @@ export const conversationJsonSchema = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["label", "type", "effect", "intent", "tone", "agency", "choiceStyle", "progression", "romanceLevel", "intimacyLevel", "riskLevel"],
+        required: ["label", "type", "effect", "intent", "tone", "agency", "choiceStyle", "progression", "romanceLevel", "intimacyLevel", "riskLevel", "why"],
         properties: {
           label: { type: "string" },
           type: { type: "string", enum: choiceTypeSchema.options },
           effect: relationshipJsonSchema(),
-          intent: { type: ["string", "null"] },
-          tone: { type: ["string", "null"] },
-          agency: { type: ["string", "null"] },
-          choiceStyle: { type: ["string", "null"] },
-          progression: { type: ["string", "null"] },
-          romanceLevel: { type: ["number", "null"] },
-          intimacyLevel: { type: ["number", "null"] },
-          riskLevel: { type: ["string", "null"] }
+          intent: { anyOf: [{ type: "string", enum: ["honest","tease","comfort","flirt","affection","observe","silent","dominant","submissive","avoid","action","question","meta","intimate"] }, { type: "null" }] },
+          tone: { anyOf: [{ type: "string", enum: ["casual","sweet","romantic","serious","playful","dark","intimate","comedy","calm","tense"] }, { type: "null" }] },
+          agency: { anyOf: [{ type: "string", enum: ["active","passive","vulnerable","assertive","reserved","supportive","teasing","protective"] }, { type: "null" }] },
+          choiceStyle: { anyOf: [{ type: "string", enum: ["keyword","sentence","short","natural","detailed","action_only","line_only","mixed"] }, { type: "null" }] },
+          progression: { anyOf: [{ type: "string", enum: ["story_forward","relationship","world_lore","character_focus","event_trigger","slow_burn","conflict","recovery"] }, { type: "null" }] },
+          romanceLevel: { anyOf: [{ type: "number" }, { type: "null" }] },
+          intimacyLevel: { anyOf: [{ type: "number" }, { type: "null" }] },
+          riskLevel: { anyOf: [{ type: "string", enum: ["low","medium","high"] }, { type: "null" }] },
+          why: { anyOf: [{ type: "string" }, { type: "null" }] }
         }
       }
     },
@@ -351,7 +353,8 @@ export function parseConversationJson(
         tone: (reply.tone ?? null) as ChoiceTone | null,
         agency: (reply.agency ?? null) as ChoiceAgency | null,
         choiceStyle: (reply.choiceStyle ?? null) as ChoiceStyle | null,
-        progression: (reply.progression ?? null) as ChoiceProgression | null
+        progression: (reply.progression ?? null) as ChoiceProgression | null,
+        why: reply.why ?? null
       })),
       smartReplies: parsed.smartReplies ?? [],
       needsUserInput: parsed.needsUserInput || mustStopAuto,

@@ -151,7 +151,7 @@ export function buildConversationPrompt(input: PromptBuildInput): PromptBuildRes
     "Narrative Quality Guidance:",
     buildQualityRule(session),
     "",
-    buildResponseFormatPrompt(outputMode, playPaceMode),
+    buildResponseFormatPrompt(outputMode, playPaceMode, input.choicePreferences, settings),
     "",
     "キャラクター:",
     (currentSceneCharacters.length ? currentSceneCharacters : bundle.characters.slice(0, 3))
@@ -364,7 +364,12 @@ function buildUserDescriptionRules(inputType: "free_text" | "choice_selected" | 
   ].join("\n");
 }
 
-function buildResponseFormatPrompt(outputMode: "json" | "ndjson", playPaceMode: string) {
+function buildResponseFormatPrompt(
+  outputMode: "json" | "ndjson",
+  playPaceMode: string,
+  prefs?: UserChoicePreferences | null,
+  settings?: AppSettings
+) {
   const choiceRule =
     playPaceMode === "auto"
       ? "- auto では suggestedReplies と smartReplies は出さない。"
@@ -372,11 +377,33 @@ function buildResponseFormatPrompt(outputMode: "json" | "ndjson", playPaceMode: 
         ? "- choice_heavy では suggestedReplies を4〜5個出し、各 label に短い結果ヒントを付ける。smartReplies は1〜2個。"
         : "- normal では suggestedReplies を2〜3個、smartReplies を2〜3個出す。";
 
+  const isGirlfriend = (settings?.experience_mode ?? "story") === "girlfriend";
+  const strength = settings?.preference_strength ?? "normal";
+  const hasPrefs = prefs && prefs.sampleCount >= 3;
+  const alignPct = hasPrefs
+    ? (isGirlfriend ? (strength === "high" ? 65 : strength === "low" ? 45 : 55)
+                    : (strength === "high" ? 55 : strength === "low" ? 30 : 45))
+    : 0;
+
+  const choiceMetaRule = [
+    "- 各 suggestedReply に intent / tone / agency / choiceStyle / progression / romanceLevel / intimacyLevel / riskLevel / why を必ず設定する。",
+    "- intent は honest/tease/comfort/flirt/affection/observe/silent/dominant/submissive/avoid/action/question/meta/intimate から1つ選ぶ。",
+    "- tone は casual/sweet/romantic/serious/playful/dark/intimate/comedy/calm/tense から1つ選ぶ。",
+    "- agency は active/passive/vulnerable/assertive/reserved/supportive/teasing/protective から1つ選ぶ。",
+    "- choiceStyle は keyword/sentence/short/natural/detailed/action_only/line_only/mixed から1つ選ぶ。",
+    "- progression は story_forward/relationship/world_lore/character_focus/event_trigger/slow_burn/conflict/recovery から1つ選ぶ。",
+    "- why: この選択肢を生成した短い理由（15字以内・日本語）。debug表示用。",
+    hasPrefs
+      ? `- 選択肢配分: 約${alignPct}%をユーザー好みに、${isGirlfriend ? "25" : "30"}%をシーン目的に必要な選択肢に、残りを意外性・リスク・別方向に割り当てる。全選択肢を同じ方向に寄せてはいけない。`
+      : "- 選択肢は多様な方向性を含めること。全部同じ方向に偏らない。"
+  ].join("\n");
+
   const sharedChoices = [
     "- 選択肢には毎回異なる type を最低2種類含める。",
     "- talk と action だけに偏らず、observe / silence / approach / leave / question / avoid / honest / flirt / intimate から状況に合うものを使う。",
     "- 状況に合う場合、suggestedReplies の最後に type: silence の「黙って様子を見る」系の選択肢を1つ含めてよい（例: 「……何も言わず様子を見る」「黙って相手の反応を待つ」）。重要分岐やNSWF直前では不要。",
-    choiceRule
+    choiceRule,
+    choiceMetaRule
   ].join("\n");
 
   if (outputMode === "ndjson") {
@@ -768,24 +795,24 @@ function buildChoicePreferenceSummary(
   settings: AppSettings
 ): string[] {
   if (!prefs || prefs.sampleCount < 3) return [];
-  const strength = settings.preference_strength ?? "normal";
-  const basePct = strength === "low" ? 30 : strength === "high" ? 60 : 50;
-  const isGirlfriend = (settings.experience_mode ?? "story") === "girlfriend";
-  const alignPct = isGirlfriend ? Math.min(basePct + 10, 70) : basePct;
-  const topIntents = topNPreferenceKeys(prefs.preferredIntents, 2);
-  const topTone = topNPreferenceKeys(prefs.preferredTones, 1);
+  const topIntents = topNPreferenceKeys(prefs.preferredIntents, 3);
+  const topTones = topNPreferenceKeys(prefs.preferredTones, 2);
+  const topAgency = topNPreferenceKeys(prefs.preferredAgency, 1);
   const topStyle = topNPreferenceKeys(prefs.preferredChoiceStyles, 1);
-  const topProgression = topNPreferenceKeys(prefs.preferredProgression, 1);
+  const topProgression = topNPreferenceKeys(prefs.preferredProgression, 2);
   const lines: string[] = [];
-  if (topIntents.length) lines.push(`- Often chooses ${topIntents.join("/")} choices.`);
-  if (topTone.length) lines.push(`- Prefers ${topTone[0]} tone.`);
-  if (topStyle.length) lines.push(`- Prefers ${topStyle[0]}-style replies.`);
-  if (topProgression.length) lines.push(`- Favors ${topProgression[0]} story progression.`);
-  if (prefs.slowBurnPreferenceScore > prefs.sampleCount * 0.3) lines.push(`- Likes slow-burn development.`);
+  if (topIntents.length) lines.push(`- Often chooses ${topIntents.join("/")} intent choices.`);
+  if (topTones.length) lines.push(`- Prefers ${topTones.join("/")} tone.`);
+  if (topAgency.length) lines.push(`- Tends toward ${topAgency[0]} agency.`);
+  if (topStyle.length) lines.push(`- Prefers ${topStyle[0]}-style choice labels.`);
+  if (topProgression.length) lines.push(`- Favors ${topProgression.join("/")} story progression.`);
+  if (prefs.slowBurnPreferenceScore > prefs.sampleCount * 0.3) lines.push(`- Enjoys slow-burn development.`);
+  if (prefs.romancePreferenceScore > prefs.sampleCount * 0.4) lines.push(`- High romance preference (score: ${prefs.romancePreferenceScore.toFixed(1)}).`);
+  if (prefs.storyProgressPreferenceScore > prefs.sampleCount * 0.3) lines.push(`- Values story progress over relationship depth.`);
   if (!lines.length) return [];
   return [
-    ...lines,
-    `- Align ~${alignPct}% of choices with these preferences, but keep story-critical and surprising options.`
+    `[User Choice Preferences — ${prefs.sampleCount} choices tracked]`,
+    ...lines
   ];
 }
 

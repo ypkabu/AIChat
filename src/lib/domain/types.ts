@@ -320,6 +320,7 @@ export type SuggestedReply = {
   romanceLevel?: number | null;
   intimacyLevel?: number | null;
   riskLevel?: string | null;
+  why?: string | null;
 };
 
 export type ChoiceEventRecord = {
