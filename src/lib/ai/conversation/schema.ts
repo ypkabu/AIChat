@@ -231,7 +231,9 @@ export const conversationJsonSchema = {
     "timeline",
     "suggestedReplies",
     "smartReplies",
-    "directorUpdate"
+    "directorUpdate",
+    "continueSuggestion",
+    "characterControl"
   ],
   properties: {
     timeline: {
@@ -256,7 +258,7 @@ export const conversationJsonSchema = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["label", "type", "effect"],
+        required: ["label", "type", "effect", "intent", "tone", "agency", "choiceStyle", "progression", "romanceLevel", "intimacyLevel", "riskLevel"],
         properties: {
           label: { type: "string" },
           type: { type: "string", enum: choiceTypeSchema.options },
@@ -282,7 +284,7 @@ export const conversationJsonSchema = {
     continueSuggestion: {
       type: "object",
       additionalProperties: false,
-      required: ["available", "label"],
+      required: ["available", "label", "reason"],
       properties: {
         available: { type: "boolean" },
         label: { type: "string" },
@@ -290,9 +292,12 @@ export const conversationJsonSchema = {
       }
     },
     characterControl: {
+      anyOf: [
+        { type: "null" },
+        {
       type: "object",
       additionalProperties: false,
-      required: ["targetCharacter", "expression", "motion"],
+      required: ["targetCharacter", "expression", "motion", "gaze", "cameraDistance", "position", "intensity"],
       properties: {
         targetCharacter: { type: "string" },
         expression: { type: "string", enum: ["neutral","smile","blush","embarrassed","annoyed","angry","sad","worried","surprised","serious"] },
@@ -302,6 +307,8 @@ export const conversationJsonSchema = {
         position: { type: "string", enum: ["left","center","right"] },
         intensity: { type: "number" }
       }
+        }
+      ]
     }
   }
 } as const;
