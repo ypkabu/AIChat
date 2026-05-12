@@ -1,0 +1,17 @@
+.next/
+.next-logs/
+node_modules/
+out/
+dist/
+.env
+.env*.local
+*.tsbuildinfo
+coverage/
+supabase/.branches/
+supabase/.temp/
+
+.vercel
+.playwright-cli/
+dev-server*.log
+.claude/settings.local.json
+task.md
