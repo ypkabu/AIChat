@@ -319,7 +319,7 @@ export type SuggestedReply = {
   progression?: ChoiceProgression | null;
   romanceLevel?: number | null;
   intimacyLevel?: number | null;
-  riskLevel?: "low" | "medium" | "high" | null;
+  riskLevel?: string | null;
 };
 
 export type ChoiceEventRecord = {
@@ -336,7 +336,7 @@ export type ChoiceEventRecord = {
   progression: ChoiceProgression | null;
   romanceLevel: number;
   intimacyLevel: number;
-  riskLevel: "low" | "medium" | "high";
+  riskLevel: string;
   createdAt: string;
 };
 

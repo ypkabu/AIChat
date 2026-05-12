@@ -140,7 +140,7 @@ export const conversationOutputSchema = z.object({
       progression: z.string().nullable().optional(),
       romanceLevel: z.number().int().min(0).max(5).nullable().optional(),
       intimacyLevel: z.number().int().min(0).max(5).nullable().optional(),
-      riskLevel: z.enum(["low", "medium", "high"]).nullable().optional()
+      riskLevel: z.string().nullable().optional()
     })
   ).default([]),
   smartReplies: z.array(z.string().min(1)).max(3).default([]),

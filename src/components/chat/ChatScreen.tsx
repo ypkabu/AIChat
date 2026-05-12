@@ -32,6 +32,8 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
   const [infoBoxOpen, setInfoBoxOpen] = useState(false);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const bottomPanelRef = useRef<HTMLDivElement | null>(null);
+  const [bottomPanelHeight, setBottomPanelHeight] = useState(200);
   const session = state.sessions.find((item) => item.id === sessionId);
   const bundle = session ? getBundle(session.scenario_id) : null;
   const messages = state.messages.filter((message) => message.session_id === sessionId);
@@ -59,6 +61,17 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length, busy]);
+
+  useEffect(() => {
+    const panel = bottomPanelRef.current;
+    if (!panel) return;
+    const observer = new ResizeObserver(() => {
+      setBottomPanelHeight(panel.offsetHeight + 16);
+    });
+    observer.observe(panel);
+    setBottomPanelHeight(panel.offsetHeight + 16);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.visualViewport) return;
@@ -367,7 +380,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
         )}
       </header>
 
-      <section className="mx-auto w-full max-w-md flex-1 overflow-y-auto pb-64" onPointerDown={() => busy && skipCurrentTurn()}>
+      <section className="mx-auto w-full max-w-md flex-1 overflow-y-auto" style={{ paddingBottom: bottomPanelHeight + keyboardOffset }} onPointerDown={() => busy && skipCurrentTurn()}>
         {error && (
           <div className="mx-3 mt-3 flex gap-2 rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
             <ShieldAlert className="h-5 w-5 shrink-0" aria-hidden />
@@ -531,6 +544,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
       </section>
 
       <div
+        ref={bottomPanelRef}
         className="fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-md gap-1 transition-transform duration-150"
         style={keyboardOffset ? { transform: `translateY(-${keyboardOffset}px)` } : undefined}
       >
