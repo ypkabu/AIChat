@@ -33,16 +33,8 @@ export async function POST(request: Request) {
   }
   const allowed = nsfwAllowed(payload.adultConfirmed, payload.nsfwImageEnabled);
   const nsfw = payload.isNsfwRequested && allowed;
-  const selected = nsfw
-    ? {
-        provider: payload.nsfwImageProvider || payload.nsfwImageBackend,
-        model: payload.nsfwImageModel || payload.nsfwImageBackend
-      }
-    : {
-        provider: payload.standardImageProvider || payload.standardImageBackend,
-        model: payload.standardImageModel || payload.standardImageBackend
-      };
-  const backend = getImageBackend(selected.provider, selected.model);
+  const selected = resolveImageSelection(payload, nsfw);
+  const backend = getImageBackend(selected.backendProvider, selected.model);
 
   try {
     const response = await backend.generateImage({
@@ -62,4 +54,43 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Image generation failed" }, { status: 400 });
   }
+}
+
+type ImageRequestPayload = z.infer<typeof requestSchema>;
+
+function resolveImageSelection(payload: ImageRequestPayload, nsfw: boolean) {
+  const requestedProvider = nsfw
+    ? payload.nsfwImageProvider || payload.nsfwImageBackend
+    : payload.standardImageProvider || payload.standardImageBackend;
+  const requestedModel = nsfw
+    ? payload.nsfwImageModel || payload.nsfwImageBackend
+    : payload.standardImageModel || payload.standardImageBackend;
+  const envProvider = nsfw ? process.env.NSFW_IMAGE_PROVIDER : process.env.STANDARD_IMAGE_PROVIDER;
+  const inferredProvider = inferConfiguredImageProvider(nsfw);
+  const provider = isMockProvider(requestedProvider)
+    ? (envProvider || inferredProvider || requestedProvider)
+    : requestedProvider;
+  const model = isMockProvider(requestedProvider)
+    ? ((nsfw ? process.env.NSFW_IMAGE_MODEL : process.env.STANDARD_IMAGE_MODEL) || requestedModel)
+    : requestedModel;
+  return {
+    provider,
+    backendProvider: nsfw && !provider.toLowerCase().includes("nsfw") && !isMockProvider(provider)
+      ? `${provider}:nsfw`
+      : provider,
+    model
+  };
+}
+
+function inferConfiguredImageProvider(nsfw: boolean) {
+  const imageUrl = nsfw
+    ? process.env.NSFW_IMAGE_BACKEND_URL || process.env.STANDARD_IMAGE_BACKEND_URL
+    : process.env.STANDARD_IMAGE_BACKEND_URL || process.env.NSFW_IMAGE_BACKEND_URL;
+  if (!imageUrl) return "";
+  if (process.env.RUNPOD_API_KEY) return "runpod";
+  return "comfyui";
+}
+
+function isMockProvider(provider: string) {
+  return !provider || provider.toLowerCase() === "mock" || provider.toLowerCase().startsWith("mock");
 }

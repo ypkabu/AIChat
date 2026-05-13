@@ -1290,3 +1290,102 @@
 - 既存 backend route `/api/story/[storyId]/chat/stream` は存在するため、次回は `real_streaming_enabled` 時に AppStore からこの route を読み、失敗時に `/api/conversation` + typewriter へ fallback するのが自然。
 - `20260514090000_add_streaming_display_settings.sql` は作成のみで、Supabase 実DBへの適用は未実施。
 - 実プレイ確認で使ったローカルブラウザ状態には、修正前の raw JSON fallback メッセージが残っている可能性がある。コード上は以後 raw JSON 風payloadを本文に出さないよう修正済み。
+
+## 2026-05-14 (Phase 2 SSE接続 + streaming migration適用 + image provider設定)
+
+### 実装内容
+
+- AppStore から `real_streaming_enabled` 時に `/api/story/[storyId]/chat/stream` を読む Phase 2 フロント接続を実装した。
+- stream route から届く SSE `timeline_item` を受け取り、既存のタイプライター表示に1件ずつ流すようにした。
+- `choices` / `smart_replies` / `director_update` / `usage` / `done` を AppStore 側で統合し、会話完了後の pending choices、Smart Reply、Story Director、usage log 更新に反映するようにした。
+- stream が失敗・空応答・fallback 指示を返した場合、`streaming_fallback_enabled` が true なら既存 `/api/conversation` + typewriter へ戻すようにした。
+- stream route の request schema を既存 `/api/conversation` と揃え、`linkedLorebookEntries`、`choicePreferences`、`continue_without_user_speech`、usage cost を受け取れるようにした。
+- stream route の `choices` / `smart_replies` 正規化で、選択肢メタデータと SmartReply オブジェクトを落とさないようにした。
+- `usage_logs.meta` に `real_streaming_used`, `streaming_fallback_used`, `first_token_latency_ms` を追加した。
+- Supabase MCP で streaming display settings SQL を実DBに適用した。MCP上の migration 履歴は `add_streaming_display_settings` として自動採番され、対象列の存在を確認済み。
+- 画像生成provider設定を改善した。クライアント設定が mock のままでも、server-only env `STANDARD_IMAGE_PROVIDER` / `NSFW_IMAGE_PROVIDER` または `STANDARD_IMAGE_BACKEND_URL` / `NSFW_IMAGE_BACKEND_URL` から実providerを解決する。APIキーは引き続き server-only env のみ。
+- NSFW画像生成時に `NSFW_IMAGE_BACKEND_URL` を優先し、`runpod:nsfw` / `comfyui:nsfw` として nsfw capable backend を選べるようにした。
+
+### 触ったファイル
+
+- `src/lib/store/AppStore.tsx`
+- `src/app/api/story/[storyId]/chat/stream/route.ts`
+- `src/app/api/conversation/route.ts`
+- `src/app/api/images/generate/route.ts`
+- `src/lib/ai/types.ts`
+- `src/lib/ai/conversation/openaiProvider.ts`
+- `src/lib/ai/conversation/providers/googleProvider.ts`
+- `src/lib/ai/conversation/providers/anthropicProvider.ts`
+- `src/lib/ai/imageBackends.ts`
+- `.env.example`
+- `Docs/AI_TASKS.md`
+- `Docs/AI_WORKLOG.md`
+
+### 確認
+
+- `npm run typecheck` → 成功。
+- `npm run build` → 成功。
+- `npm run lint` → package.json に lint script がないため実行不可。
+- Supabase MCP `_list_migrations` / `_execute_sql` → `app_settings` の `streaming_display_enabled`, `typewriter_enabled`, `typewriter_speed`, `real_streaming_enabled`, `streaming_fallback_enabled`, `show_skip_button` 列を確認。
+- In-app browser / dev server `http://127.0.0.1:3002`: 設定画面で「本物のストリーミング（実験中）」をONにして会話送信。応答中に本文が段階表示され、スキップで残りtimelineが即時確定し、完了後に選択肢が再表示されることを確認。
+
+### 注意点
+
+- Supabase MCP の `apply_migration` は履歴versionを自動採番するため、ローカルファイル名 `20260514090000_add_streaming_display_settings.sql` そのものではなく `add_streaming_display_settings` として記録された。SQLは冪等なので、将来 `db push` が同ファイルを再適用しても壊れない。
+- 現在の `.env.local` は `STANDARD_IMAGE_BACKEND_URL` / `NSFW_IMAGE_BACKEND_URL` が空で、`RUNPOD_API_KEY` と provider env も未設定。そのため実画像生成は引き続き mock fallback。実運用には Runpod または ComfyUI の server-only env 設定が必要。
+
+## 2026-05-14 (続きを見る不具合修正 + 本番3D/画像利用タスク分解)
+
+### 実装内容
+
+- `続きを見る` は手動の沈黙継続であり、オート進行の最大3回制限とは別扱いにした。
+- ChatScreen の `handleSilentContinue` と表示条件から `auto_continue_count >= 3` によるブロックを外した。
+- AppStore の `sendSilentContinue` から同じ上限チェックを外し、手動継続時に `auto_continue_count` を加算しないようにした。
+- これにより、何度か `続きを見る` を押した後でも手動継続ターンを生成できる。
+- 3Dモデル本番利用と画像生成本番利用は、外部アセット、CORS、ライセンス、APIキー、Runpod/ComfyUI endpoint など人間側の環境設定が必要なため、実装済み機能を前提に確認タスクへ分解した。
+
+### 触ったファイル
+
+- `src/components/chat/ChatScreen.tsx`
+- `src/lib/store/AppStore.tsx`
+- `Docs/AI_TASKS.md`
+- `Docs/AI_WORKLOG.md`
+
+### 確認
+
+- `npm run typecheck` → 成功。
+- `npm run build` → 成功。
+
+### 注意点
+
+- `続きを生成` は自動進行系の制御を使うため、引き続き `session.auto_continue_allowed` の影響を受ける。
+- `続きを見る` は `choice_heavy` では非表示のまま。通常/autoモードの手動沈黙継続として扱う。
+- 画像生成本番利用には server-only env の設定が必要。APIキーやendpointはDocs/Agentmemoryに保存しない。
+
+## 2026-05-14 (手動設定チェック / スマホ同期差分調査)
+
+### 実施内容
+
+- Docs と Agentmemory を確認し、環境変数、Supabase、AI Provider、画像生成Provider、3D/VRM、PWA/Service Worker、デプロイ設定、mock/TODO をコードベースから調査した。
+- Git 状態を確認。ローカルは `master` / HEAD `f69935ea96cecf9b263646da18abb8404a366089` で、複数の未コミット変更が残っている。
+- Supabase MCP で実DBの migration / table / storage bucket / RLS policy を確認した。`avatars` と `generated-images` bucket は存在し、Edge Functions は未使用。
+- 本番Supabaseには standalone lorebook 系と scenario detail cover の migration が未反映。`lorebooks` / `plot_lorebook_links` がなく、`lorebook_entries.scenario_id` も NOT NULL のまま。
+- `/api/debug/version` を追加した。secret は返さず、version / commit / build env / Supabase project ref末尾だけを返す。
+
+### 触ったファイル
+
+- `src/app/api/debug/version/route.ts`
+- `Docs/AI_TASKS.md`
+- `Docs/AI_WORKLOG.md`
+
+### 確認
+
+- `npm run typecheck` → 成功。
+- `npm run build` → 成功。`/api/debug/version` が Next.js route として認識されることを build output で確認。
+- `npm run lint` → package.json に lint script がないため未実行。
+
+### 注意点
+
+- Vercel CLI と Supabase CLI はローカル PATH に存在しなかったため、hosting側 env 一覧や CLI migration diff は未確認。Supabase 実DBは MCP で確認済み。
+- 本番DBへの DDL は未実行。未適用 migration は既存データ削除を含まないが、RLS policy と nullable 変更を含むため、適用前に影響範囲を確認する。
+- `.env.local` の値は確認したが、secret/APIキーの中身は出力していない。

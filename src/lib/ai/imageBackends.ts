@@ -8,8 +8,8 @@ import { ComfyUIImageBackend } from "./image/comfyuiAdapter";
  * 画像バックエンドを返す。
  *
  * 対応プロバイダー:
- *   "runpod"  — Runpod Serverless。env: STANDARD_IMAGE_BACKEND_URL / RUNPOD_API_KEY
- *   "comfyui" — ComfyUI (ローカル / ngrok)。env: STANDARD_IMAGE_BACKEND_URL
+ *   "runpod"  — Runpod Serverless。env: STANDARD_IMAGE_BACKEND_URL / NSFW_IMAGE_BACKEND_URL / RUNPOD_API_KEY
+ *   "comfyui" — ComfyUI (ローカル / ngrok)。env: STANDARD_IMAGE_BACKEND_URL / NSFW_IMAGE_BACKEND_URL
  *   "mock"    — SVGプレースホルダー（デフォルト）
  */
 export function getImageBackend(provider: string, model?: string): ImageBackend {
@@ -18,9 +18,9 @@ export function getImageBackend(provider: string, model?: string): ImageBackend 
   const isNsfwProvider = providerId.includes("nsfw");
 
   if (providerId === "runpod" || providerId.startsWith("runpod:")) {
-    const endpointUrl = process.env.STANDARD_IMAGE_BACKEND_URL
-      ?? process.env.NSFW_IMAGE_BACKEND_URL
-      ?? "";
+    const endpointUrl = isNsfwProvider
+      ? (process.env.NSFW_IMAGE_BACKEND_URL ?? process.env.STANDARD_IMAGE_BACKEND_URL ?? "")
+      : (process.env.STANDARD_IMAGE_BACKEND_URL ?? process.env.NSFW_IMAGE_BACKEND_URL ?? "");
     const apiKey = process.env.RUNPOD_API_KEY ?? "";
     if (!endpointUrl || !apiKey) {
       console.warn("[ImageBackend] Runpod selected but STANDARD_IMAGE_BACKEND_URL or RUNPOD_API_KEY is not set — falling back to mock.");
@@ -30,9 +30,9 @@ export function getImageBackend(provider: string, model?: string): ImageBackend 
   }
 
   if (providerId === "comfyui" || providerId.startsWith("comfyui:")) {
-    const baseUrl = (process.env.STANDARD_IMAGE_BACKEND_URL
-      ?? process.env.NSFW_IMAGE_BACKEND_URL
-      ?? "").replace(/\/$/, "");
+    const baseUrl = (isNsfwProvider
+      ? (process.env.NSFW_IMAGE_BACKEND_URL ?? process.env.STANDARD_IMAGE_BACKEND_URL ?? "")
+      : (process.env.STANDARD_IMAGE_BACKEND_URL ?? process.env.NSFW_IMAGE_BACKEND_URL ?? "")).replace(/\/$/, "");
     if (!baseUrl) {
       console.warn("[ImageBackend] ComfyUI selected but STANDARD_IMAGE_BACKEND_URL is not set — falling back to mock.");
       return new MockImageBackend(modelId, isNsfwProvider);

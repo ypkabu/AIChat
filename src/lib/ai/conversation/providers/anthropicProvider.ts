@@ -35,6 +35,7 @@ export class AnthropicConversationProvider implements ConversationProvider {
       session: request.session,
       relationships: request.relationships ?? [],
       lorebook: request.lorebook ?? request.bundle.lorebook,
+      linkedLorebookEntries: request.linkedLorebookEntries ?? [],
       memories: request.memories ?? [],
       recentMessages: request.messages,
       latestUserInput: request.userInput,

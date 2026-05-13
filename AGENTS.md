@@ -23,3 +23,70 @@
 5. `Docs/STORY_SYSTEM.md` when changing story progression, director, foreshadowing, or narrative quality logic
 6. Tail of `Docs/AI_WORKLOG.md` only when recent decisions matter
 7. Agentmemory search for durable project decisions, unresolved issues, and caveats, if available
+
+
+# AI Coding Agent Rules
+
+## Project role split
+
+This project uses the following AI workflow:
+
+- Claude Code / Codex:
+  - research
+  - planning
+  - architecture decisions
+  - implementation of risky or design-heavy tasks
+  - task splitting
+  - prompt generation for local LLM
+  - diff review
+  - risk analysis
+
+- Local LLM:
+  - small implementation tasks only
+  - one file and one purpose per task
+  - no architecture decisions
+
+- Human:
+  - final approval
+  - build verification
+  - gameplay verification
+  - Blueprint reference checks
+
+## Global rules
+
+- Do not make unrelated changes
+- Do not rename public APIs unless explicitly requested
+- Do not rename UFUNCTION / UPROPERTY / Blueprint-facing names unless explicitly requested
+- Do not change build settings, plugin settings, or project configuration unless explicitly requested
+- Prefer small, reviewable diffs
+- For complex tasks, plan first
+- When asked to save usage, split tasks into:
+  - tasks Claude Code / Codex should implement directly
+  - tasks safe for local LLM
+  - tasks the human should verify
+- Reviews should focus on the diff, not a full redesign
+- If unclear, ask or mark as "needs confirmation"
+
+## Local LLM task policy
+
+A task is safe for local LLM only if:
+
+- it has a clearly defined target file
+- it has a clearly defined edit range
+- it does not require architecture decisions
+- it does not require changing public APIs
+- it does not touch Blueprint-facing names
+- it can be reviewed from a small diff
+
+Unsafe tasks should stay with Claude Code / Codex.
+
+## Review policy
+
+After implementation, create a summary for a separate review session:
+
+- original goal
+- changed files
+- what was implemented by Claude Code / Codex
+- what was delegated to local LLM
+- risks to check
+- manual verification steps

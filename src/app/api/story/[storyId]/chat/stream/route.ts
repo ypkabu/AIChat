@@ -5,7 +5,7 @@ import { parseConversationJson } from "@/lib/ai/conversation/schema";
 import { calcCostJpy } from "@/lib/ai/costCalc";
 import { buildConversationPrompt, buildLatestUserMessage } from "@/lib/promptBuilder";
 import { estimateTokenLikeCount, newId } from "@/lib/utils";
-import type { ChoiceType, DirectorUpdate, SuggestedReply, TimelineItem } from "@/lib/domain/types";
+import type { ChoiceType, DirectorUpdate, SmartReply, SuggestedReply, TimelineItem } from "@/lib/domain/types";
 import type { ConversationRequest, ConversationResponse } from "@/lib/ai/types";
 
 const requestSchema = z.object({
@@ -14,18 +14,21 @@ const requestSchema = z.object({
   messages: z.array(z.any()),
   userInput: z.string().min(1),
   settings: z.any(),
-  inputType: z.enum(["free_text", "choice_selected", "auto_continue"]).optional(),
+  inputType: z.enum(["free_text", "choice_selected", "auto_continue", "continue_without_user_speech"]).optional(),
   selectedChoice: z.object({
     label: z.string(),
     type: z.string()
   }).nullable().optional(),
   relationships: z.array(z.any()).optional(),
   lorebook: z.array(z.any()).optional(),
+  linkedLorebookEntries: z.array(z.any()).optional(),
   memories: z.array(z.any()).optional(),
   foreshadowingItems: z.array(z.any()).optional(),
   storySummaries: z.array(z.any()).optional(),
   environmentState: z.any().nullable().optional(),
-  characterStates: z.array(z.any()).optional()
+  characterStates: z.array(z.any()).optional(),
+  usageTotalCostJpy: z.number().optional(),
+  choicePreferences: z.any().nullable().optional()
 });
 
 type OpenAIStreamEvent = {
@@ -72,6 +75,7 @@ export async function POST(request: Request, context: { params: Promise<{ storyI
     session: payload.session,
     relationships: payload.relationships ?? [],
     lorebook: payload.lorebook ?? payload.bundle.lorebook,
+    linkedLorebookEntries: payload.linkedLorebookEntries ?? [],
     memories: payload.memories ?? [],
     recentMessages: payload.messages,
     latestUserInput: payload.userInput,
@@ -341,11 +345,8 @@ function emitNdjsonObject(raw: Record<string, unknown>, send: (event: string, da
     return "director_update";
   }
   if (type === "smart_replies" || type === "smartreplies") {
-    const replies = Array.isArray(raw.replies)
-      ? raw.replies.filter((item): item is string => typeof item === "string")
-      : Array.isArray(raw.items)
-        ? raw.items.filter((item): item is string => typeof item === "string")
-        : [];
+    const rawReplies = Array.isArray(raw.replies) ? raw.replies : Array.isArray(raw.items) ? raw.items : [];
+    const replies = rawReplies.map(normalizeSmartReply).filter((item): item is SmartReply => Boolean(item));
     send("smart_replies", { replies });
     return "smart_replies";
   }
@@ -361,14 +362,58 @@ function normalizeChoice(raw: unknown): SuggestedReply | null {
     id: typeof record.id === "string" ? record.id : newId("choice"),
     label,
     type: normalizeChoiceType(record.type),
-    effect: {
-      trust: 0,
-      affection: 0,
-      comfort: 0,
-      curiosity: 1,
-      tension: 0
-    }
+    effect: normalizeChoiceEffect(record.effect),
+    intent: nullableString(record.intent) as SuggestedReply["intent"],
+    tone: nullableString(record.tone) as SuggestedReply["tone"],
+    agency: nullableString(record.agency) as SuggestedReply["agency"],
+    choiceStyle: nullableString(record.choiceStyle) as SuggestedReply["choiceStyle"],
+    progression: nullableString(record.progression) as SuggestedReply["progression"],
+    romanceLevel: nullableNumber(record.romanceLevel),
+    intimacyLevel: nullableNumber(record.intimacyLevel),
+    riskLevel: nullableString(record.riskLevel),
+    why: nullableString(record.why)
   };
+}
+
+function normalizeSmartReply(raw: unknown): SmartReply | null {
+  if (typeof raw === "string") {
+    const label = raw.trim();
+    return label ? { id: newId("sr"), label, intent: null, tone: null, agency: null } : null;
+  }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const record = raw as Record<string, unknown>;
+  const label = String(record.label ?? "").trim();
+  if (!label) return null;
+  return {
+    id: typeof record.id === "string" ? record.id : newId("sr"),
+    label,
+    intent: nullableString(record.intent) as SmartReply["intent"],
+    tone: nullableString(record.tone) as SmartReply["tone"],
+    agency: nullableString(record.agency) as SmartReply["agency"]
+  };
+}
+
+function normalizeChoiceEffect(raw: unknown): SuggestedReply["effect"] {
+  const record = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
+  return {
+    trust: numberOrDefault(record.trust, 0),
+    affection: numberOrDefault(record.affection, 0),
+    comfort: numberOrDefault(record.comfort, 0),
+    curiosity: numberOrDefault(record.curiosity, 1),
+    tension: numberOrDefault(record.tension, 0)
+  };
+}
+
+function nullableString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function nullableNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function numberOrDefault(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 function normalizeChoiceType(value: unknown): ChoiceType {

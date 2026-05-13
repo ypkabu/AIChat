@@ -9,6 +9,7 @@ import type {
   CharacterControl,
   ChoiceEventRecord,
   ContinueSuggestion,
+  DirectorUpdate,
   ExpressionType,
   ForeshadowingItem,
   ForeshadowingStatus,
@@ -32,6 +33,7 @@ import type {
   SessionCharacterState,
   SessionEnvironmentState,
   SessionSceneVisualState,
+  SmartReply,
   StyleSettings,
   StorySummary,
   StoryScene,
@@ -46,7 +48,7 @@ import type {
 } from "@/lib/domain/types";
 import { extractVoiceText } from "@/lib/ai/voice/voiceText";
 import { clamp, estimateTokenLikeCount, newId, nowIso } from "@/lib/utils";
-import type { ConversationResponse } from "@/lib/ai/types";
+import type { ConversationResponse, ConversationStreamEvent } from "@/lib/ai/types";
 import type { BackgroundJobsResponse } from "@/lib/ai/types";
 import { uploadGeneratedImageFromUrl, uploadVoiceAudio } from "@/lib/supabase/storage";
 import {
@@ -78,6 +80,28 @@ type TypewriterRevealOptions = {
 type TypewriterRevealResult = {
   skipped: boolean;
   totalRevealTimeMs: number;
+};
+
+type ConversationDisplayResult = {
+  ai: ConversationResponse;
+  aiMessages: Message[];
+  displayedAiMessages: boolean;
+  revealResult: TypewriterRevealResult | null;
+  usedRealStreaming: boolean;
+  firstTokenLatencyMs: number | null;
+};
+
+type DisplayConversationOptions = {
+  requestPayload: Record<string, unknown>;
+  storyId: ID;
+  sessionId: ID;
+  characters: Array<{ id: ID; name: string; avatar_url?: string | null }>;
+  userProfile?: { id: ID; display_name: string; avatar_url?: string | null } | null;
+  allowAiGeneratedUser: boolean;
+  control: TurnControl;
+  revealOptions: TypewriterRevealOptions;
+  settings: AppSettings;
+  updateMessages: (updater: (messages: Message[]) => Message[]) => void;
 };
 
 type AppStoreValue = {
@@ -805,31 +829,29 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       };
       let displayedAiMessages = false;
       let revealResult: TypewriterRevealResult | null = null;
+      let conversationDisplay: ConversationDisplayResult | null = null;
       let aiMessages: Message[] = [];
       let ai: ConversationResponse | null = null;
       try {
-        const response = await fetch("/api/conversation", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestPayload)
-        });
-
-        if (!response.ok) {
-          throw new Error("会話生成に失敗しました。");
-        }
-
-        ai = (await response.json()) as ConversationResponse;
-        aiMessages = aiResponseToMessages(ai, sessionId, bundle.characters, profile, { allowAiGeneratedUser: inputType === "choice_selected" });
-
-        if (revealOptions.intervalMs > 0) {
-          revealResult = await displayMessagesSequentially(aiMessages, control, revealOptions, (updateMessages) => {
+        const displayed = await generateAndDisplayConversation({
+          requestPayload,
+          storyId: session.scenario_id,
+          sessionId,
+          characters: bundle.characters,
+          userProfile: profile,
+          allowAiGeneratedUser: inputType === "choice_selected",
+          control,
+          revealOptions,
+          settings: requestSettings,
+          updateMessages: (updateMessages) => {
             setState((current) => ({ ...current, messages: updateMessages(current.messages) }));
-          });
-        } else {
-          setState((current) => ({ ...current, messages: [...current.messages, ...aiMessages] }));
-        }
-
-        displayedAiMessages = true;
+          }
+        });
+        ai = displayed.ai;
+        aiMessages = displayed.aiMessages;
+        revealResult = displayed.revealResult;
+        displayedAiMessages = displayed.displayedAiMessages;
+        conversationDisplay = displayed;
       } catch (error) {
         setState((current) => ({
           ...current,
@@ -869,7 +891,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         created_at: nowIso(),
         updated_at: nowIso()
       }));
-      const usage = usageFromConversation(state.userId, ai, conversationLatencyMs, requestSettings, revealResult);
+      const usage = usageFromConversation(state.userId, ai, conversationLatencyMs, requestSettings, revealResult, conversationDisplay);
       const messagesForQuality = [...localMessages.filter((message) => message.session_id === sessionId), ...aiMessages].slice(-18);
       const messagesAfterTurn = [...localMessages.filter((message) => message.session_id === sessionId), ...aiMessages];
 
@@ -1030,39 +1052,39 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       };
       let displayedAiMessages = false;
       let revealResult: TypewriterRevealResult | null = null;
+      let conversationDisplay: ConversationDisplayResult | null = null;
       let aiMessages: Message[] = [];
       let ai: ConversationResponse | null = null;
       try {
-        const response = await fetch("/api/conversation", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestPayload)
-        });
-
-        if (!response.ok) {
-          setState((current) => ({
-            ...current,
-            sessions: current.sessions.map((item) =>
-              item.id === sessionId
-                ? { ...item, needs_user_input: true, auto_continue_allowed: false, updated_at: nowIso() }
-                : item
-            )
-          }));
-          throw new Error("オート進行に失敗しました。");
-        }
-
-        ai = (await response.json()) as ConversationResponse;
-        aiMessages = aiResponseToMessages(ai, sessionId, bundle.characters, profile, { allowAiGeneratedUser: false });
-
-        if (revealOptions.intervalMs > 0) {
-          revealResult = await displayMessagesSequentially(aiMessages, control, revealOptions, (updateMessages) => {
+        const displayed = await generateAndDisplayConversation({
+          requestPayload,
+          storyId: session.scenario_id,
+          sessionId,
+          characters: bundle.characters,
+          userProfile: profile,
+          allowAiGeneratedUser: false,
+          control,
+          revealOptions,
+          settings: requestSettings,
+          updateMessages: (updateMessages) => {
             setState((current) => ({ ...current, messages: updateMessages(current.messages) }));
-          });
-        } else {
-          setState((current) => ({ ...current, messages: [...current.messages, ...aiMessages] }));
-        }
-
-        displayedAiMessages = true;
+          }
+        });
+        ai = displayed.ai;
+        aiMessages = displayed.aiMessages;
+        revealResult = displayed.revealResult;
+        displayedAiMessages = displayed.displayedAiMessages;
+        conversationDisplay = displayed;
+      } catch (error) {
+        setState((current) => ({
+          ...current,
+          sessions: current.sessions.map((item) =>
+            item.id === sessionId
+              ? { ...item, needs_user_input: true, auto_continue_allowed: false, updated_at: nowIso() }
+              : item
+          )
+        }));
+        throw error instanceof Error ? error : new Error("オート進行に失敗しました。");
       } finally {
         if (activeTurnControl.current === control && !ai?.suggestedReplies.length) activeTurnControl.current = null;
       }
@@ -1086,7 +1108,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         created_at: nowIso(),
         updated_at: nowIso()
       }));
-      const usage = usageFromConversation(state.userId, ai, conversationLatencyMs, requestSettings, revealResult);
+      const usage = usageFromConversation(state.userId, ai, conversationLatencyMs, requestSettings, revealResult, conversationDisplay);
       const messagesForQuality = [...state.messages.filter((message) => message.session_id === sessionId), ...aiMessages].slice(-18);
       const messagesAfterTurn = [...state.messages.filter((message) => message.session_id === sessionId), ...aiMessages];
 
@@ -1203,9 +1225,6 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       const bundle = getBundle(session.scenario_id);
       if (!bundle) return;
 
-      // Block if over auto count limit
-      if ((session.auto_continue_count ?? 0) >= 3) return;
-
       const profile = bundle.userProfiles.find((item) => item.id === session.user_profile_id) ?? bundle.userProfiles[0];
       activeTurnControl.current?.abortController?.abort();
       activeTurnControl.current?.resolveDelay?.();
@@ -1273,52 +1292,53 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
       let displayedAiMessages = false;
       let revealResult: TypewriterRevealResult | null = null;
+      let conversationDisplay: ConversationDisplayResult | null = null;
       let aiMessages: Message[] = [];
       let ai: ConversationResponse | null = null;
       try {
-        const response = await fetch("/api/conversation", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestPayload)
-        });
-        if (!response.ok) {
-          setState((current) => ({
-            ...current,
-            sessions: current.sessions.map((item) =>
-              item.id === sessionId
-                ? { ...item, needs_user_input: true, auto_continue_allowed: false, updated_at: nowIso() }
-                : item
-            )
-          }));
-          throw new Error("続きの生成に失敗しました。");
-        }
-
-        ai = (await response.json()) as ConversationResponse;
-        aiMessages = aiResponseToMessages(ai, sessionId, bundle.characters, profile, { allowAiGeneratedUser: false });
-
-        if (revealOptions.intervalMs > 0) {
-          revealResult = await displayMessagesSequentially(aiMessages, control, revealOptions, (updateMessages) => {
+        const displayed = await generateAndDisplayConversation({
+          requestPayload,
+          storyId: session.scenario_id,
+          sessionId,
+          characters: bundle.characters,
+          userProfile: profile,
+          allowAiGeneratedUser: false,
+          control,
+          revealOptions,
+          settings: requestSettings,
+          updateMessages: (updateMessages) => {
             setState((current) => ({ ...current, messages: updateMessages(current.messages) }));
-          });
-        } else {
-          setState((current) => ({ ...current, messages: [...current.messages, ...aiMessages] }));
-        }
-        displayedAiMessages = true;
+          }
+        });
+        ai = displayed.ai;
+        aiMessages = displayed.aiMessages;
+        revealResult = displayed.revealResult;
+        displayedAiMessages = displayed.displayedAiMessages;
+        conversationDisplay = displayed;
+      } catch (error) {
+        setState((current) => ({
+          ...current,
+          sessions: current.sessions.map((item) =>
+            item.id === sessionId
+              ? { ...item, needs_user_input: true, auto_continue_allowed: false, updated_at: nowIso() }
+              : item
+          )
+        }));
+        throw error instanceof Error ? error : new Error("続きの生成に失敗しました。");
       } finally {
         if (activeTurnControl.current === control && !ai?.suggestedReplies.length) activeTurnControl.current = null;
       }
       if (!ai) throw new Error("続きの生成に失敗しました。");
       const conversationLatencyMs = Math.round(performance.now() - conversationStartedAt);
       if (activeTurnControl.current === control) activeTurnControl.current = null;
-      const usage = usageFromConversation(state.userId, ai, conversationLatencyMs, requestSettings, revealResult);
+      const usage = usageFromConversation(state.userId, ai, conversationLatencyMs, requestSettings, revealResult, conversationDisplay);
       const messagesForQuality = [...state.messages, eventMessage, ...aiMessages].filter((m) => m.session_id === sessionId).slice(-18);
       const messagesAfterTurn = [...state.messages, eventMessage, ...aiMessages].filter((m) => m.session_id === sessionId);
 
       setState((current) => {
         const currentSession = current.sessions.find((item) => item.id === sessionId) ?? sessionForRequest;
         const immediateAi = withQualityCheck(ai, qualityFromSession(currentSession));
-        const nextCount = Math.min((currentSession.auto_continue_count ?? 0) + 1, 3);
-        const autoState = computeAutoState(immediateAi, currentSession, bundle.style, nextCount, isMonthlyBudgetNearLimit({ ...current, usageLogs: [...current.usageLogs, usage] }));
+        const autoState = computeAutoState(immediateAi, currentSession, bundle.style, 0, isMonthlyBudgetNearLimit({ ...current, usageLogs: [...current.usageLogs, usage] }));
         const foreshadowingItems = applyForeshadowingUpdates(
           current.foreshadowingItems,
           immediateAi,
@@ -1339,7 +1359,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
                 pending_choices: ai.suggestedReplies,
                 needs_user_input: autoState.needsUserInput,
                 auto_continue_allowed: autoState.autoContinueAllowed,
-                auto_continue_count: nextCount,
+                auto_continue_count: autoState.autoContinueCount,
                 ...applyDirectorSessionUpdate(item, immediateAi, bundle.storyScenes),
                 story_flags: Object.fromEntries([
                   ...Object.entries(item.story_flags),
@@ -2644,6 +2664,329 @@ function mergeDelta(aiDelta: RelationshipValues, choiceDelta?: Partial<Relations
   };
 }
 
+async function generateAndDisplayConversation(options: DisplayConversationOptions): Promise<ConversationDisplayResult> {
+  if (options.settings.real_streaming_enabled) {
+    try {
+      return await streamConversationResponse(options);
+    } catch (error) {
+      if (options.settings.streaming_fallback_enabled === false) {
+        throw error;
+      }
+      console.warn("[Conversation Stream] Falling back to JSON conversation", error);
+    }
+  }
+  return fetchConversationJson(options);
+}
+
+async function fetchConversationJson(options: DisplayConversationOptions): Promise<ConversationDisplayResult> {
+  const response = await fetch("/api/conversation", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(options.requestPayload)
+  });
+
+  if (!response.ok) {
+    throw new Error("会話生成に失敗しました。");
+  }
+
+  const ai = (await response.json()) as ConversationResponse;
+  const aiMessages = aiResponseToMessages(ai, options.sessionId, options.characters, options.userProfile, {
+    allowAiGeneratedUser: options.allowAiGeneratedUser
+  });
+  const revealResult = await displayAiMessages(aiMessages, options.control, options.revealOptions, options.updateMessages);
+  return {
+    ai,
+    aiMessages,
+    displayedAiMessages: true,
+    revealResult,
+    usedRealStreaming: false,
+    firstTokenLatencyMs: null
+  };
+}
+
+async function streamConversationResponse(options: DisplayConversationOptions): Promise<ConversationDisplayResult> {
+  const startedAt = performance.now();
+  const response = await fetch(`/api/story/${encodeURIComponent(options.storyId)}/chat/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(options.requestPayload)
+  });
+
+  if (!response.ok || !response.body) {
+    throw new Error("ストリーミング会話生成に失敗しました。");
+  }
+
+  const timeline: TimelineItem[] = [];
+  const aiMessages: Message[] = [];
+  let suggestedReplies: SuggestedReply[] = [];
+  let smartReplies: SmartReply[] = [];
+  let directorUpdate: DirectorUpdate | null = null;
+  let usage: ConversationResponse["usage"] | null = null;
+  let streamError: ConversationStreamEvent["data"] | null = null;
+  let firstTokenLatencyMs: number | null = null;
+  let totalRevealTimeMs = 0;
+  let skipped = false;
+
+  for await (const event of readConversationStreamEvents(response.body)) {
+    if (event.event === "timeline_item") {
+      if (firstTokenLatencyMs === null) {
+        firstTokenLatencyMs = Math.round(performance.now() - startedAt);
+      }
+      const item = normalizeTimelineItem(event.data);
+      if (!options.allowAiGeneratedUser && isGeneratedUserTimelineItem(item, options.userProfile)) {
+        timeline.push(item);
+        continue;
+      }
+      const message = timelineItemToMessage(item, options.sessionId, options.characters, options.userProfile, {}, nowIso());
+      const revealResult = await displayAiMessages([message], options.control, options.revealOptions, options.updateMessages);
+      skipped = skipped || Boolean(revealResult?.skipped);
+      totalRevealTimeMs += revealResult?.totalRevealTimeMs ?? 0;
+      timeline.push(item);
+      aiMessages.push(message);
+      continue;
+    }
+
+    if (event.event === "choices") {
+      suggestedReplies = Array.isArray(event.data.items) ? event.data.items : [];
+      continue;
+    }
+
+    if (event.event === "smart_replies") {
+      smartReplies = normalizeSmartReplies(event.data.replies);
+      continue;
+    }
+
+    if (event.event === "director_update") {
+      directorUpdate = event.data;
+      continue;
+    }
+
+    if (event.event === "usage") {
+      usage = event.data;
+      continue;
+    }
+
+    if (event.event === "done") {
+      usage = event.data.usage ?? usage;
+      break;
+    }
+
+    if (event.event === "error") {
+      streamError = event.data;
+      if (!timeline.length && event.data.fallback) {
+        throw new Error(event.data.message);
+      }
+    }
+  }
+
+  if (!timeline.length) {
+    throw new Error("ストリーミング応答が空でした。");
+  }
+
+  const ai = conversationResponseFromStream({
+    timeline,
+    suggestedReplies,
+    smartReplies,
+    directorUpdate,
+    usage,
+    options,
+    streamError
+  });
+  return {
+    ai,
+    aiMessages,
+    displayedAiMessages: true,
+    revealResult: { skipped, totalRevealTimeMs },
+    usedRealStreaming: true,
+    firstTokenLatencyMs
+  };
+}
+
+async function displayAiMessages(
+  aiMessages: Message[],
+  control: TurnControl,
+  revealOptions: TypewriterRevealOptions,
+  updateMessages: (updater: (messages: Message[]) => Message[]) => void
+) {
+  if (revealOptions.intervalMs > 0) {
+    return displayMessagesSequentially(aiMessages, control, revealOptions, updateMessages);
+  }
+  updateMessages((current) => [...current, ...aiMessages]);
+  return null;
+}
+
+async function* readConversationStreamEvents(stream: ReadableStream<Uint8Array>): AsyncGenerator<ConversationStreamEvent> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+      let boundary = buffer.indexOf("\n\n");
+      while (boundary !== -1) {
+        const frame = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const event = parseConversationSseFrame(frame);
+        if (event) yield event;
+        boundary = buffer.indexOf("\n\n");
+      }
+    }
+    const trailing = buffer.trim();
+    if (trailing) {
+      const event = parseConversationSseFrame(trailing);
+      if (event) yield event;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function parseConversationSseFrame(frame: string): ConversationStreamEvent | null {
+  const lines = frame.split(/\r?\n/);
+  const eventName = lines.find((line) => line.startsWith("event:"))?.slice(6).trim();
+  const data = lines
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trim())
+    .join("\n");
+  if (!eventName || !data || data === "[DONE]") return null;
+  try {
+    return { event: eventName, data: JSON.parse(data) } as ConversationStreamEvent;
+  } catch {
+    return null;
+  }
+}
+
+function conversationResponseFromStream(input: {
+  timeline: TimelineItem[];
+  suggestedReplies: SuggestedReply[];
+  smartReplies: SmartReply[];
+  directorUpdate: DirectorUpdate | null;
+  usage: ConversationResponse["usage"] | null;
+  options: DisplayConversationOptions;
+  streamError: ConversationStreamEvent["data"] | null;
+}): ConversationResponse {
+  const session = getRequestSession(input.options.requestPayload);
+  const timelineText = input.timeline.map((item) => item.content).join("\n");
+  const needsUserInput = input.suggestedReplies.length > 0 || session?.play_pace_mode !== "auto";
+  const autoContinueAllowed = !needsUserInput && session?.play_pace_mode === "auto";
+  const usage = input.usage ?? {
+    backend: "stream",
+    provider: "openai",
+    model: "stream",
+    input_tokens: estimateTokenLikeCount(JSON.stringify(input.options.requestPayload).slice(0, 8000)),
+    output_tokens: estimateTokenLikeCount(timelineText),
+    estimated_cost_jpy: 0,
+    prompt_chars: null,
+    routeHint: null,
+    model_role: "stream",
+    reason: "client_stream_fallback_usage"
+  };
+
+  return {
+    timeline: input.timeline,
+    narration: input.timeline.find((item) => item.type === "narration")?.content ?? "",
+    characterMessages: input.timeline
+      .filter((item) => item.type === "character")
+      .map((item) => ({
+        characterName: item.characterName ?? "語り手",
+        content: item.content
+      })),
+    suggestedReplies: input.suggestedReplies,
+    smartReplies: input.smartReplies,
+    needsUserInput,
+    autoContinueAllowed,
+    continueSuggestion: {
+      available: !needsUserInput,
+      label: "続きを見る",
+      reason: !needsUserInput ? "ストリーム応答に選択肢がないため、続きの生成が可能です。" : null
+    },
+    characterControl: null,
+    storyUpdate: {
+      shouldAdvance: Boolean(input.directorUpdate?.shouldAdvanceScene),
+      nextSceneKey: null,
+      newFlags: [],
+      progressDelta: input.directorUpdate?.shouldAdvanceScene ? 2 : 1
+    },
+    memoryCandidates: [],
+    relationshipDelta: DEFAULT_RELATIONSHIP,
+    imageCue: {
+      shouldSuggestImage: false,
+      reason: null,
+      sceneType: null,
+      nsfwLevel: "none"
+    },
+    directorUpdate: input.directorUpdate ?? defaultStreamDirectorUpdate(session),
+    foreshadowingUpdates: [],
+    qualityCheck: defaultStreamQualityCheck(input.suggestedReplies.length > 0),
+    usage,
+    ...(isStreamErrorData(input.streamError)
+      ? { error: { type: "stream", message: input.streamError.message, backend: usage.backend } }
+      : {})
+  };
+}
+
+function normalizeTimelineItem(item: TimelineItem): TimelineItem {
+  const type = item.type === "character" || item.type === "system" || item.type === "event" ? item.type : "narration";
+  return {
+    type,
+    characterName: typeof item.characterName === "string" ? item.characterName : null,
+    content: typeof item.content === "string" ? item.content : ""
+  };
+}
+
+function normalizeSmartReplies(replies: SmartReply[]) {
+  return replies
+    .map((reply) => ({
+      id: reply.id || newId("sr"),
+      label: reply.label,
+      intent: reply.intent ?? null,
+      tone: reply.tone ?? null,
+      agency: reply.agency ?? null
+    }))
+    .filter((reply) => reply.label);
+}
+
+function defaultStreamDirectorUpdate(session: PlaySession | null): DirectorUpdate {
+  return {
+    currentBeatIndex: session?.current_beat_index ?? 0,
+    objectiveCompleted: false,
+    stallRisk: "low",
+    shouldAdvanceScene: false,
+    shouldIntroduceEvent: false,
+    introducedHook: null,
+    reason: "ストリーム応答に進行判断が含まれなかったため、現在シーンを維持します。"
+  };
+}
+
+function defaultStreamQualityCheck(hasChoices: boolean): QualityCheck {
+  return {
+    isRepetitive: false,
+    hasNewInformation: true,
+    hasCharacterAction: true,
+    hasEmotionalChange: false,
+    hasRelationshipChange: false,
+    hasSceneChange: false,
+    hasForeshadowing: false,
+    hasChoicePressure: hasChoices,
+    hasForwardMotion: true,
+    isStalling: false,
+    sceneObjectiveProgress: "medium",
+    qualityScore: 6,
+    problem: null,
+    improvementHint: null
+  };
+}
+
+function getRequestSession(payload: Record<string, unknown>) {
+  return payload.session && typeof payload.session === "object" ? payload.session as PlaySession : null;
+}
+
+function isStreamErrorData(data: unknown): data is { message: string } {
+  return Boolean(data && typeof data === "object" && typeof (data as Record<string, unknown>).message === "string");
+}
+
 async function displayMessagesSequentially(
   messages: Message[],
   control: TurnControl,
@@ -3306,8 +3649,11 @@ function usageFromConversation(
   response: ConversationResponse,
   latencyMs: number,
   settings?: AppSettings,
-  revealResult?: TypewriterRevealResult | null
+  revealResult?: TypewriterRevealResult | null,
+  conversationDisplay?: ConversationDisplayResult | null
 ): UsageLog {
+  const realStreamingEnabled = settings?.real_streaming_enabled ?? false;
+  const usedRealStreaming = conversationDisplay?.usedRealStreaming ?? false;
   return {
     id: newId("usage"),
     user_id: userId,
@@ -3328,10 +3674,12 @@ function usageFromConversation(
       latency_ms: latencyMs,
       model_role: response.usage.routeHint ?? "normal",
       streaming_enabled: settings?.streaming_display_enabled ?? settings?.timeline_reveal_enabled ?? true,
-      real_streaming_enabled: settings?.real_streaming_enabled ?? false,
+      real_streaming_enabled: realStreamingEnabled,
+      real_streaming_used: usedRealStreaming,
+      streaming_fallback_used: realStreamingEnabled && !usedRealStreaming,
       typewriter_enabled: settings?.typewriter_enabled ?? settings?.timeline_reveal_enabled ?? true,
       typewriter_speed: settings?.typewriter_speed ?? settings?.timeline_reveal_speed ?? "normal",
-      first_token_latency_ms: latencyMs,
+      first_token_latency_ms: conversationDisplay?.firstTokenLatencyMs ?? latencyMs,
       total_generation_latency_ms: latencyMs,
       total_reveal_time_ms: revealResult?.totalRevealTimeMs ?? 0,
       reveal_skipped: revealResult?.skipped ?? false

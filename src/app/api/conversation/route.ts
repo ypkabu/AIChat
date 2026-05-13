@@ -12,13 +12,14 @@ const requestSchema = z.object({
   messages: z.array(z.any()),
   userInput: z.string().min(1),
   settings: z.any(),
-  inputType: z.enum(["free_text", "choice_selected", "auto_continue"]).optional(),
+  inputType: z.enum(["free_text", "choice_selected", "auto_continue", "continue_without_user_speech"]).optional(),
   selectedChoice: z.object({
     label: z.string(),
     type: z.string()
   }).nullable().optional(),
   relationships: z.array(z.any()).optional(),
   lorebook: z.array(z.any()).optional(),
+  linkedLorebookEntries: z.array(z.any()).optional(),
   memories: z.array(z.any()).optional(),
   foreshadowingItems: z.array(z.any()).optional(),
   storySummaries: z.array(z.any()).optional(),

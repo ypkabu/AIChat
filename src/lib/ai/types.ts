@@ -53,6 +53,7 @@ export type ConversationRequest = {
   selectedChoice?: Pick<SuggestedReply, "label" | "type"> | null;
   relationships?: RelationshipState[];
   lorebook?: LorebookEntry[];
+  linkedLorebookEntries?: LorebookEntry[];
   memories?: Memory[];
   foreshadowingItems?: ForeshadowingItem[];
   storySummaries?: StorySummary[];
@@ -136,6 +137,12 @@ export type ConversationStreamEvent =
   | {
       event: "director_update";
       data: DirectorUpdate;
+    }
+  | {
+      event: "smart_replies";
+      data: {
+        replies: SmartReply[];
+      };
     }
   | {
       event: "usage";

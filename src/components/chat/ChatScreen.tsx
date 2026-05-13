@@ -264,7 +264,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
   };
 
   const handleSilentContinue = async () => {
-    if (busy || (session.auto_continue_count ?? 0) >= 3) return;
+    if (busy) return;
     scrollToBottom("smooth");
     setBusy(true);
     setAutoRunning(false);
@@ -686,7 +686,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
             >
               続きを生成
             </button>
-            {session.play_pace_mode !== "choice_heavy" && (session.auto_continue_count ?? 0) < 3 && (
+            {session.play_pace_mode !== "choice_heavy" && (
               <button
                 type="button"
                 onClick={() => void handleSilentContinue()}

@@ -340,5 +340,27 @@
 - [x] In-app browser確認: フレッシュセッションで送信後、応答待ち中は補助アクションがdisabled、応答受信後に本文が段階表示され、完了後に選択肢/Smart Replyが再表示されることを確認。
 - [x] In-app browser確認: スキップ押下後、応答確定時に残りtimelineが即時表示され、busy解除と選択肢再表示が行われることを確認。
 - [ ] `npm run lint` は package.json に lint script がないため未実行。
-- [ ] Phase 2 のフロント側 SSE/NDJSON 本物ストリーミング接続は未実装。既存 backend route `/api/story/[storyId]/chat/stream` はあるため、次は AppStore から `real_streaming_enabled` 時に利用する。
-- [ ] Supabase に `20260514090000_add_streaming_display_settings.sql` を適用する。
+- [x] Phase 2 のフロント側 SSE 接続を実装。`real_streaming_enabled` 時は AppStore から `/api/story/[storyId]/chat/stream` を読み、失敗時は `/api/conversation` + typewriter へ fallback する。
+- [x] stream route の `choices` / `smart_replies` / `director_update` / `usage` を AppStore 側で反映し、usage meta に `real_streaming_used` / `streaming_fallback_used` / `first_token_latency_ms` を記録。
+- [x] Supabase 実DBへ streaming display settings SQL を適用。MCP適用履歴では `add_streaming_display_settings` として記録され、対象列の存在確認済み。
+- [x] 画像生成provider設定を改善。クライアント設定が mock のままでも、server-only env `STANDARD_IMAGE_PROVIDER` / `NSFW_IMAGE_PROVIDER` または `STANDARD_IMAGE_BACKEND_URL` / `NSFW_IMAGE_BACKEND_URL` から実providerを解決できるようにした。APIキーはクライアントへ出さない。
+- [x] In-app browser確認: `real_streaming_enabled` ON で会話送信後、本文の段階表示、補助アクションdisable、スキップ後の全文確定、選択肢再表示を確認。
+- [ ] 現在の `.env.local` では image provider/env URL が未設定または空のため、実画像生成は引き続き mock fallback。実運用には Runpod/ComfyUI の server-only env 設定が必要。
+
+## 続きを見る不具合修正 + 本番3D/画像利用タスク分解 (2026-05-14)
+
+- [x] `続きを見る` が `auto_continue_count >= 3` で止まる問題を修正。手動の沈黙継続は自動進行3回制限とは分離する。
+- [x] `sendSilentContinue` が手動継続時に `auto_continue_count` を増やして上限到達させないよう修正。
+- [x] `npm run typecheck` 成功。
+- [x] `npm run build` 成功。
+- [ ] 3Dモデル本番利用: VRMファイルのホスティング先、CORS、ライセンス、スマホ負荷を人間が確認する。
+- [ ] 画像生成本番利用: Runpod または ComfyUI の server-only env を本番環境に設定し、生成結果が Supabase Storage に保存されることを手動確認する。
+
+## 手動設定 / スマホ同期差分調査 (2026-05-14)
+
+- [x] 環境変数、Supabase、AI Provider、画像生成Provider、3Dモデル、PWA、デプロイ設定をコードベースから確認。
+- [x] `/api/debug/version` を追加し、appVersion / commitHash / buildTime / environment / Supabase project ref末尾を secret なしで確認できるようにした。
+- [x] `npm run typecheck` / `npm run build` 成功。
+- [ ] `npm run lint` は package.json に lint script がないため未実行。
+- [ ] 本番Supabaseには `20260512210000_add_lorebook_system.sql`, `20260512220000_lorebook_entries_nullable_scenario_id.sql`, `20260513090000_add_scenario_detail_cover.sql` 相当が未反映。lorebooks / plot_lorebook_links / scenarios.cover_image_url 等の適用が必要。
+- [ ] スマホ版とローカル版の完全同期確認には、本番URLの `/api/debug/version` とローカル `/api/debug/version` の commitHash 比較、PWAキャッシュ削除、Vercel env 確認が必要。
