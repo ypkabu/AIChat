@@ -13,6 +13,7 @@ export function MessageList({
   characters,
   images,
   voiceJobs,
+  showAuxiliaryActions = true,
   onGenerateEventImage,
   onGenerateVoice
 }: {
@@ -20,6 +21,7 @@ export function MessageList({
   characters: ScenarioCharacter[];
   images: GeneratedImage[];
   voiceJobs?: VoiceGenerationJob[];
+  showAuxiliaryActions?: boolean;
   onGenerateEventImage: (message: Message) => void;
   onGenerateVoice?: ((message: Message, characterId: string | null) => void) | null;
 }) {
@@ -39,7 +41,7 @@ export function MessageList({
           return <ImageCard key={message.id} image={images.find((image) => image.id === imageId)} />;
         }
         if (message.message_type === "event") {
-          return <EventMessage key={message.id} message={message} onGenerateImage={() => onGenerateEventImage(message)} />;
+          return <EventMessage key={message.id} message={message} onGenerateImage={showAuxiliaryActions ? () => onGenerateEventImage(message) : undefined} />;
         }
         return <SystemMessage key={message.id} message={message} />;
       })}

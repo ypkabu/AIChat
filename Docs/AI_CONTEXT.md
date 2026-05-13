@@ -15,16 +15,27 @@
 
 ## 作業開始時の参照順
 
-プロジェクト文脈は会話履歴や assistant memory ではなく、リポジトリ内の Markdown を正とする。すでに読んだ MD は、変更がない限り再読しない。
+プロジェクト文脈は会話履歴や assistant memory / Agentmemory ではなく、リポジトリ内の Markdown を正とする。Agentmemory は補助記憶としてのみ使う。すでに読んだ MD は、変更がない限り再読しない。
 
 1. `Docs/AI_CONTEXT.md`: 常に読む短い概要。
 2. `Docs/AI_TASKS.md`: 現在の優先タスクだけ確認。
 3. `Docs/BUGS.md`: 不具合対応時だけ確認。
 4. `Docs/ARCHITECTURE.md`: DB/Provider/PWA の詳細が必要な時だけ確認。
 5. `Docs/AI_WORKLOG.md`: 直近の判断が必要な時だけ末尾を読む。
-6. 実装ファイルは関連範囲に絞って読む。大きなファイルは検索してから該当範囲を読む。
+6. Agentmemory: 利用可能な場合のみ、このプロジェクトに関係する過去の重要判断、未解決問題、環境依存の注意点を検索する。
+7. 実装ファイルは関連範囲に絞って読む。大きなファイルは検索してから該当範囲を読む。
 
 ストーリー会話システム関連の作業 → `Docs/STORY_SYSTEM.md` を読め。
+
+## Agentmemory 運用
+
+- Agentmemory は補助記憶。正式な作業記録と仕様は `Docs/` 配下の Markdown と root の `AGENTS.md`。
+- 作業開始時は、必要 Docs を読んだ後に Agentmemory を検索する。Docs と矛盾した場合は Docs を優先し、必要なら Docs を更新する。
+- 作業中に、新しく判明した重要な設計判断、非自明なバグ原因、環境依存の注意点、未解決問題を Agentmemory に保存する。
+- 一時的な検証メモ、テスト用データ、API キー、個人情報、秘密情報は Agentmemory に保存しない。
+- 作業終了時は `Docs/AI_TASKS.md` と `Docs/AI_WORKLOG.md` を更新し、プロジェクトルールや設計方針が変わった場合のみ `Docs/AI_CONTEXT.md` を更新する。そのうえで今後のセッションに必要な重要事項だけ Agentmemory に保存する。
+- Agentmemory ツールが現在の実行環境で使えない場合は、その旨を簡潔に報告し、Docs を正式記録として作業を続ける。
+- このプロジェクトには `.mcp.json` で Agentmemory MCP を設定済み。ローカルサーバーは `npm run agentmemory` で起動し、`npm run agentmemory:status` で確認する。
 
 ## 重要ルール
 

@@ -286,3 +286,59 @@
 - [x] `.claude/` を `.gitignore` に追加。
 - [x] `npm run typecheck` / `npm run build` 成功。
 - [x] 軽い Playwright 確認: 作品詳細表示、SFW cover fallback、ロアブック作成/項目追加/保存、プロット連動/解除が成功。
+
+## チャットスクロール中の補助アクション折りたたみ (2026-05-13)
+
+- [x] ChatScreen に 96px threshold の末尾判定を追加し、スクロール中の状態を `isAtBottom / isUserScrollingHistory / hasNewMessagesBelow` で管理。
+- [x] 最下部にいる時だけ Story Choices、Smart Reply、Continue Button、画像生成メニューを表示するよう制御。
+- [x] 過去ログを読んでいる時は補助アクションを非表示にし、小さな `↓ 最新へ` ボタンを表示。
+- [x] `↓ 最新へ` 押下でチャット本文の内部スクロール領域を最下部へ戻し、補助アクションを再表示。
+- [x] 新規メッセージ/疑似ストリーミング中は、最下部にいる場合だけ自動スクロールし、過去ログ閲覧中は `新着あり ↓ 最新へ` 表示に留めるよう調整。
+- [x] Composer の画像生成メニューと EventMessage の画像生成候補を補助アクション表示状態に連動。
+- [x] 固定下部パネルの高さ変化で末尾判定が外れないよう、末尾滞在中のみスクロール位置を維持。
+- [x] Playwright mobile check: 最下部表示、上スクロールで非表示、`↓ 最新へ` で再表示、画像生成メニュー非表示を確認。
+- [x] `npm run typecheck` / `npm run build` 成功。
+- [ ] `npm run lint` は package.json に lint script がないため未実行。
+
+## チャットスクロール UX レビュー指摘修正 (2026-05-14)
+
+- [x] 過去ログ閲覧中の自由入力送信では `scrollToBottom` を呼ばず、送信前に最下部だった場合だけ追従するよう修正。
+- [x] `busy` の切り替わりだけで `hasNewMessagesBelow` が立たないよう、メッセージ件数変化だけを新着判定に使用。
+- [x] スクロールイベントごとの `setScrollState` を、値が変わった時だけ state object を返すよう軽量化。
+- [x] Playwright mobile check: 過去ログ閲覧中に自由入力を送信しても `scrollTop` が 0 のまま、`↓ 最新へ` 表示に留まることを確認。
+- [x] `npm run typecheck` / `npm run build` 成功。
+- [ ] `npm run lint` は package.json に lint script がないため未実行。
+
+## Agentmemory 運用導入 (2026-05-14)
+
+- [x] `AGENTS.md` に、Docs を正式記録、Agentmemory を補助記憶として扱う方針を追加。
+- [x] `Docs/PROMPT_GUIDE.md` に、作業開始時の Agentmemory 検索と作業終了時の保存方針を追加。
+- [x] `Docs/AI_CONTEXT.md` に Agentmemory 運用ルールを追加。
+- [x] 保存対象/保存禁止対象を明文化（重要判断・非自明なバグ原因・環境依存注意点は保存、APIキー/秘密/個人情報/一時メモは保存禁止）。
+- [x] Agentmemory MCP 設定を追加（Codex global `~/.codex/config.toml` と project `.mcp.json`）。
+- [x] `iii` runtime v0.11.2 を `%USERPROFILE%\.local\bin\iii.exe` に導入。
+- [x] `package.json` に `agentmemory` / `agentmemory:status` / `agentmemory:doctor` scripts を追加。
+- [x] Agentmemory server v0.9.12 起動確認。REST `http://localhost:3111` / viewer `http://localhost:3113`。
+- [x] 初期メモリとして、プロジェクトの Agentmemory 運用方針、導入構成、lint script 欠如、未適用 Supabase migration 注意点を保存。
+- [x] `smart-search` で保存済みメモリが検索できることを確認。
+- [x] Agentmemory のローカルDB `data/` を git 管理しないよう `.gitignore` に追加。
+- [ ] LLM/embedding provider key は未設定。現状は BM25-only / noop provider の安全設定で運用する。
+
+## Zeta風タイプライター表示 + スクロール連携 (2026-05-14)
+
+- [x] 既存のメッセージ単位疑似ストリーミングを、timeline item の本文が少しずつ増えるタイプライター表示へ変更。
+- [x] character / narration / event / system / AI生成user timelineを、既存の吹き出し・ナレーションブロック内で空本文から段階表示するよう実装。
+- [x] `fast / normal / slow / instant` のタイプライター速度を設定に追加し、fast=約12ms/3文字、normal=約24ms/2文字、slow=約48ms/1文字で表示。
+- [x] 表示中は `busy` を維持し、Composer送信、Story Choices、Smart Reply、Continue Button、画像生成補助アクションを非表示/disable。
+- [x] スキップボタンで現在itemと残りtimelineを即時表示し、二重保存せず通常メッセージとして確定。
+- [x] 最下部滞在中は本文の文字増加に合わせて自動スクロールし、過去ログ閲覧中は勝手に最下部へ戻さないよう連携。
+- [x] `usage_logs.meta` に streaming/typewriter 設定、生成レイテンシ、reveal時間、skip有無を記録。
+- [x] 実プレイ確認中に見つかった OpenAI Structured Outputs schema 不整合を修正（smartReplies item required、romance/intimacy decimal許容）。
+- [x] OpenAI通常生成/stream route の `max_output_tokens` を増やし、JSON途中切れ時に raw JSON を本文表示しないフォールバックへ変更。
+- [x] app_settings に streaming/typewriter 関連列を追加する migration `20260514090000_add_streaming_display_settings.sql` を作成。
+- [x] `npm run typecheck` / `npm run build` 成功。
+- [x] In-app browser確認: フレッシュセッションで送信後、応答待ち中は補助アクションがdisabled、応答受信後に本文が段階表示され、完了後に選択肢/Smart Replyが再表示されることを確認。
+- [x] In-app browser確認: スキップ押下後、応答確定時に残りtimelineが即時表示され、busy解除と選択肢再表示が行われることを確認。
+- [ ] `npm run lint` は package.json に lint script がないため未実行。
+- [ ] Phase 2 のフロント側 SSE/NDJSON 本物ストリーミング接続は未実装。既存 backend route `/api/story/[storyId]/chat/stream` はあるため、次は AppStore から `real_streaming_enabled` 時に利用する。
+- [ ] Supabase に `20260514090000_add_streaming_display_settings.sql` を適用する。

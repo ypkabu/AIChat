@@ -106,7 +106,7 @@ export class OpenAIConversationProvider implements ConversationProvider {
             schema: conversationJsonSchema
           }
         },
-        max_output_tokens: request.settings.low_cost_mode ? 700 : 1100
+        max_output_tokens: request.settings.low_cost_mode ? 1400 : 2200
       })
     });
 

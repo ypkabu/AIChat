@@ -138,8 +138,8 @@ export const conversationOutputSchema = z.object({
       agency: z.string().nullable().optional(),
       choiceStyle: z.string().nullable().optional(),
       progression: z.string().nullable().optional(),
-      romanceLevel: z.number().int().min(0).max(5).nullable().optional(),
-      intimacyLevel: z.number().int().min(0).max(5).nullable().optional(),
+      romanceLevel: z.number().min(0).max(5).nullable().optional(),
+      intimacyLevel: z.number().min(0).max(5).nullable().optional(),
       riskLevel: z.string().nullable().optional(),
       why: z.string().nullable().optional()
     })
@@ -289,7 +289,7 @@ export const conversationJsonSchema = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["id", "label"],
+        required: ["id", "label", "intent", "tone", "agency"],
         properties: {
           id: { type: "string" },
           label: { type: "string" },
@@ -342,7 +342,10 @@ export function parseConversationJson(
     raw = JSON.parse(text);
   } catch (error) {
     console.error("Failed to parse conversation AI JSON", error, text);
-    return fallbackFromRawText(text, usage, backend, error instanceof Error ? error.message : "Unknown JSON parse error");
+    const fallbackText = looksLikeJsonPayload(text)
+      ? "AI応答のJSONが途中で途切れたため、本文表示を中断しました。もう一度送信してください。"
+      : text;
+    return fallbackFromRawText(fallbackText, usage, backend, error instanceof Error ? error.message : "Unknown JSON parse error");
   }
 
   try {
@@ -396,8 +399,16 @@ export function parseConversationJson(
     };
   } catch (error) {
     console.error("Failed to validate conversation AI JSON", error, text);
-    return fallbackFromRawText(text, usage, backend, error instanceof Error ? error.message : "Unknown parse error");
+    const fallbackText = looksLikeJsonPayload(text)
+      ? "AI応答の形式が期待と合わなかったため、本文表示を中断しました。もう一度送信してください。"
+      : text;
+    return fallbackFromRawText(fallbackText, usage, backend, error instanceof Error ? error.message : "Unknown parse error");
   }
+}
+
+function looksLikeJsonPayload(text: string) {
+  const trimmed = text.trimStart();
+  return trimmed.startsWith("{") || trimmed.startsWith("[");
 }
 
 export function fallbackFromRawText(

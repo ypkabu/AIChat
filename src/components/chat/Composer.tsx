@@ -1,13 +1,14 @@
 "use client";
 
 import { Camera, ImagePlus, Send, Sparkles, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export function Composer({
   value,
   disabled,
   allowFreeInput,
   imageEnabled,
+  showAuxiliaryActions = true,
   onChange,
   onSend,
   onGenerateImage
@@ -16,15 +17,21 @@ export function Composer({
   disabled?: boolean;
   allowFreeInput: boolean;
   imageEnabled: boolean;
+  showAuxiliaryActions?: boolean;
   onChange: (value: string) => void;
   onSend: () => void;
   onGenerateImage: (kind: "scene" | "event" | "character") => void;
 }) {
   const [open, setOpen] = useState(false);
+  const showImageActions = showAuxiliaryActions && imageEnabled;
+
+  useEffect(() => {
+    if (!showAuxiliaryActions) setOpen(false);
+  }, [showAuxiliaryActions]);
 
   return (
     <div className="border-t border-white/10 bg-canvas/95 px-3 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2 backdrop-blur-xl">
-      {open && (
+      {open && showImageActions && (
         <div className="mb-2 grid gap-2 rounded-md border border-white/10 bg-panel p-2">
           <div className="flex items-center justify-between px-1">
             <span className="text-xs font-semibold text-muted">画像生成</span>
@@ -44,15 +51,17 @@ export function Composer({
         </div>
       )}
       <div className="flex items-end gap-2">
-        <button
-          type="button"
-          disabled={!imageEnabled || disabled}
-          className="grid min-h-11 min-w-11 place-items-center rounded-md bg-panel2 text-muted disabled:opacity-40"
-          onClick={() => setOpen((current) => !current)}
-          aria-label="画像生成メニュー"
-        >
-          <ImagePlus className="h-5 w-5" aria-hidden />
-        </button>
+        {showAuxiliaryActions && (
+          <button
+            type="button"
+            disabled={!showImageActions || disabled}
+            className="grid min-h-11 min-w-11 place-items-center rounded-md bg-panel2 text-muted disabled:opacity-40"
+            onClick={() => setOpen((current) => !current)}
+            aria-label="画像生成メニュー"
+          >
+            <ImagePlus className="h-5 w-5" aria-hidden />
+          </button>
+        )}
         <textarea
           value={value}
           disabled={!allowFreeInput || disabled}

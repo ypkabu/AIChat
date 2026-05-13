@@ -140,6 +140,7 @@ export type CharacterControl = {
   intensity: number;
 };
 export type TimelineRevealSpeed = "slow" | "normal" | "fast" | "instant";
+export type TypewriterSpeed = TimelineRevealSpeed;
 export type TimelineItemType = "narration" | "character" | "system" | "event";
 export type ForeshadowingStatus = "planned" | "introduced" | "developing" | "ready" | "revealed" | "discarded";
 export type ForeshadowingVisibility = "hidden_to_user" | "visible_hint" | "debug_only";
@@ -809,6 +810,12 @@ export type AppSettings = {
   story_director_debug_enabled: boolean;
   timeline_reveal_enabled: boolean;
   timeline_reveal_speed: TimelineRevealSpeed;
+  streaming_display_enabled: boolean;
+  typewriter_enabled: boolean;
+  typewriter_speed: TypewriterSpeed;
+  real_streaming_enabled: boolean;
+  streaming_fallback_enabled: boolean;
+  show_skip_button: boolean;
   daily_image_limit: number;
   monthly_image_limit: number;
   voice_enabled: boolean;

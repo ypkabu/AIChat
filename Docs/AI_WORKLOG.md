@@ -1146,3 +1146,147 @@
 - `npm run typecheck` → 成功。
 - `npm run build` → 成功。
 - Playwright inline check → 作品詳細表示、SFW cover fallback、ロアブック作成/項目追加/保存、プロット連動/解除が成功。
+
+## 2026-05-13 (チャットスクロール中の補助アクション折りたたみ)
+
+### 実装内容
+
+- ChatScreen にスクロール状態管理を追加し、チャット本文の内部スクロール領域で最下部から 96px 以内かどうかを判定するようにした。
+- 最下部にいる時だけ Story Choices、Smart Reply、Continue Button、画像生成メニュー、イベント画像生成候補を表示するようにした。
+- 過去ログを読んでいる時は補助アクションを隠し、固定下部パネル上に `↓ 最新へ` / `新着あり ↓ 最新へ` ボタンを表示するようにした。
+- `↓ 最新へ` 押下時は内部スクロール領域を最下部へ戻し、補助アクションを再表示するようにした。
+- 新規メッセージや疑似ストリーミング中の自動スクロールは、ユーザーが最下部にいる場合だけ行い、過去ログ閲覧中は新着表示に留めるようにした。
+- 固定下部パネルが展開/折りたたみで高さ変更しても、末尾滞在中の位置がずれないよう補正した。
+
+### 触ったファイル
+
+- `src/components/chat/ChatScreen.tsx`
+- `src/components/chat/Composer.tsx`
+- `src/components/chat/MessageList.tsx`
+- `Docs/AI_TASKS.md`
+- `Docs/AI_WORKLOG.md`
+
+### 確認
+
+- `npm run typecheck` → 成功。
+- `npm run build` → 成功。
+- `npm run lint` → package.json に lint script がないため実行不可。
+- Playwright mobile check → 390x844 幅で、最下部では選択肢/続き/画像生成ボタンが表示、上スクロール中は非表示、`↓ 最新へ` で最下部復帰と再表示が成功。
+
+### 注意点
+
+- 会話生成 provider / mockProvider 方針には触っていない。
+- 既存の 3000 番 dev server で確認した。3001 番は同一ディレクトリの Next dev 多重起動制限により使用しなかった。
+
+## 2026-05-14 (チャットスクロール UX レビュー指摘修正)
+
+### 実装内容
+
+- 自由入力送信時、送信前に最下部だった場合だけ `scrollToBottom` するよう変更した。過去ログ閲覧中に Composer から送信しても、スクロール位置を維持する。
+- メッセージ追加検知を `messageCountRef` で管理し、`busy` の切り替わりだけでは `hasNewMessagesBelow` を立てないようにした。
+- スクロールイベント中の `setScrollState` は、`isAtBottom / isUserScrollingHistory / hasNewMessagesBelow` が変わらない場合に同じ state を返すようにして再レンダーを抑えた。
+
+### 触ったファイル
+
+- `src/components/chat/ChatScreen.tsx`
+- `Docs/AI_TASKS.md`
+- `Docs/AI_WORKLOG.md`
+
+### 確認
+
+- `npm run typecheck` → 成功。
+- `npm run build` → 成功。
+- `npm run lint` → package.json に lint script がないため実行不可。
+- Playwright mobile check → 390x844 幅で、過去ログ閲覧中に自由入力を送信しても `scrollTop` は 0 のまま、`↓ 最新へ` が表示され、最下部へ勝手に移動しないことを確認。
+
+### 注意点
+
+- 確認では `/api/conversation` を強制 500 にして、ユーザー発話追加後もスクロール追従しないことを検証した。実AI応答の内容生成 provider には触っていない。
+
+## 2026-05-14 (Agentmemory 運用導入)
+
+### 実装内容
+
+- `AGENTS.md` に Agentmemory の扱いを追加した。Docs を正式な作業記録・仕様ソースとし、Agentmemory は補助記憶としてだけ使う。
+- `Docs/PROMPT_GUIDE.md` に、作業開始時は必須 Docs を読んだ後で Agentmemory を検索する手順を追加した。
+- `Docs/AI_CONTEXT.md` に Agentmemory 運用セクションを追加し、作業中/終了時の保存基準と保存禁止事項を明文化した。
+- Agentmemory へ保存する内容は、重要な設計判断、非自明なバグ原因、環境依存の注意点、未解決問題に限定する方針にした。
+- APIキー、秘密情報、個人情報、一時的な検証メモ、テストデータは Agentmemory に保存しない方針にした。
+- Agentmemory 本体を導入した。`iii` runtime v0.11.2 を `%USERPROFILE%\.local\bin\iii.exe` に配置し、`@agentmemory/agentmemory` v0.9.12 のローカルサーバー起動を確認した。
+- Codex global config `~/.codex/config.toml` に `[mcp_servers.agentmemory]` を追加した。
+- Project root に `.mcp.json` を追加し、Claude Code 互換の MCP 設定も置いた。
+- `package.json` に `agentmemory`, `agentmemory:status`, `agentmemory:doctor` scripts を追加した。
+- Agentmemory に初期メモリを保存した: Docs優先/Agentmemory補助方針、導入構成、lint script 欠如、未適用 Supabase migration 注意点。
+- `POST /agentmemory/smart-search` で保存済みメモリが検索できることを確認した。
+- Agentmemory のローカルDBとして生成された `data/` を git 管理しないよう `.gitignore` に追加した。
+
+### 触ったファイル
+
+- `AGENTS.md`
+- `.mcp.json`
+- `.gitignore`
+- `package.json`
+- `Docs/PROMPT_GUIDE.md`
+- `Docs/AI_CONTEXT.md`
+- `Docs/AI_TASKS.md`
+- `Docs/AI_WORKLOG.md`
+
+### 確認
+
+- `npm run agentmemory:status` → 成功。Agentmemory v0.9.12 connected / healthy。
+- `npm run agentmemory:doctor` → サーバー/health/viewer は OK。LLM provider / embedding provider / graph / consolidation は未設定のため NG（意図通り、秘密情報やAPIキーは追加していない）。
+- `POST /agentmemory/remember` → 初期メモリ保存成功。
+- `POST /agentmemory/smart-search` → 保存済みメモリ検索成功。
+- ドキュメント・設定・script 変更のみ。typecheck/build は未実行。
+
+### 注意点
+
+- Agentmemory MCP 設定は追加済みだが、現在の Codex セッションに新しい MCP tools が即時追加されるとは限らない。次回セッション/再起動後に `agentmemory` tools が見える想定。
+- 現状は LLM/embedding provider key 未設定のため BM25-only / noop provider。秘密情報を勝手に追加しない方針を維持する。
+
+## 2026-05-14 (Zeta風タイプライター表示 + スクロール連携)
+
+### 実装内容
+
+- 既存の timeline 疑似ストリーミングを、メッセージ単位の遅延追加から本文タイプライター表示へ変更した。
+- AI応答JSONを受け取ったあと、各 timeline item を空本文で追加し、character / narration / event / system / AI生成user の本文を設定速度に応じて段階更新するようにした。
+- 表示完了までは `sendTurn` / `continueAutoTurn` / `sendSilentContinue` が resolve しないため、Composer 送信、Story Choices、Smart Reply、Continue Button、画像生成補助アクションは既存 `busy` とスクロール制御で非表示/disable のままになる。
+- スキップボタンで現在 item と残り timeline を即時表示し、最終的な state.messages には通常の Message だけを残すようにした。
+- 最下部にいる場合は文字増加ごとに内部スクロールを末尾へ維持し、過去ログ閲覧中は文字増加で勝手に戻さないよう ChatScreen の content-length 監視を追加した。
+- チャット本文エリア全体の pointer down で skip する挙動を外し、ストリーミング中でも過去ログをスクロールしやすくした。
+- AppSettings に `streaming_display_enabled`, `typewriter_enabled`, `typewriter_speed`, `real_streaming_enabled`, `streaming_fallback_enabled`, `show_skip_button` を追加し、設定画面の表示セクションから操作できるようにした。
+- `usage_logs.meta` に streaming/typewriter 設定、生成レイテンシ、reveal時間、skip有無を記録するようにした。
+- `supabase/migrations/20260514090000_add_streaming_display_settings.sql` を作成した。
+- 実プレイ中に OpenAI Structured Outputs schema の `smartReplies` required 不整合を発見し、`intent/tone/agency` を required + nullable 出力に合わせて修正した。
+- OpenAIが `romanceLevel: 0.5` のような小数を返すケースで Zod validation fallback になるため、`romanceLevel` / `intimacyLevel` は 0-5 の number として受けるよう修正した。
+- OpenAI JSON が `max_output_tokens` で途中切れした場合に raw JSON が本文表示されないよう、parse/validate 失敗時の JSON風payloadフォールバック文言を安全な日本語メッセージに変更した。
+- 通常 OpenAI provider と既存 stream route の `max_output_tokens` を low_cost 1400 / normal 2200 に増やした。
+
+### 触ったファイル
+
+- `src/lib/store/AppStore.tsx`
+- `src/components/chat/ChatScreen.tsx`
+- `src/components/settings/AppSettingsScreen.tsx`
+- `src/lib/ai/conversation/schema.ts`
+- `src/lib/ai/conversation/openaiProvider.ts`
+- `src/app/api/story/[storyId]/chat/stream/route.ts`
+- `src/lib/domain/types.ts`
+- `src/lib/domain/constants.ts`
+- `supabase/migrations/20260514090000_add_streaming_display_settings.sql`
+- `Docs/AI_TASKS.md`
+- `Docs/AI_WORKLOG.md`
+
+### 確認
+
+- `npm run typecheck` → 成功。
+- `npm run build` → 成功。
+- `npm run lint` → package.json に lint script がないため実行不可。
+- In-app browser / dev server `http://127.0.0.1:3000`: フレッシュセッションで選択肢送信後、応答待ち中はスキップ表示 + 補助アクションdisabled、応答受信後に本文が段階表示、完了後に選択肢/Smart Replyが再表示されることを確認。
+- In-app browser: スキップ押下後、応答確定時に残りtimelineが即時表示され、busy解除と選択肢再表示が行われることを確認。
+
+### 注意点
+
+- Phase 1 のフロント側タイプライター表示を安定化した。Phase 2 のフロント側 SSE/NDJSON 接続はまだ未実装。
+- 既存 backend route `/api/story/[storyId]/chat/stream` は存在するため、次回は `real_streaming_enabled` 時に AppStore からこの route を読み、失敗時に `/api/conversation` + typewriter へ fallback するのが自然。
+- `20260514090000_add_streaming_display_settings.sql` は作成のみで、Supabase 実DBへの適用は未実施。
+- 実プレイ確認で使ったローカルブラウザ状態には、修正前の raw JSON fallback メッセージが残っている可能性がある。コード上は以後 raw JSON 風payloadを本文に出さないよう修正済み。

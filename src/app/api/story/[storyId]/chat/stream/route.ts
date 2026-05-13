@@ -179,7 +179,7 @@ export async function POST(request: Request, context: { params: Promise<{ storyI
                 content: userMessage
               }
             ],
-            max_output_tokens: payload.settings.low_cost_mode ? 800 : 1200
+            max_output_tokens: payload.settings.low_cost_mode ? 1400 : 2200
           })
         });
 

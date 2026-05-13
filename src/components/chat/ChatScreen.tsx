@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, BookOpen, FastForward, ImagePlus, Menu, Pause, Play, ShieldAlert } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowDown, ArrowLeft, BookOpen, FastForward, ImagePlus, Menu, Pause, Play, ShieldAlert } from "lucide-react";
 import { useAppStore } from "@/lib/store/AppStore";
 import type {
   Message,
@@ -20,6 +20,13 @@ import { MessageList } from "./MessageList";
 import { SceneBackground } from "./SceneBackground";
 
 const VrmViewer = dynamic(() => import("@/components/vrm/VrmViewer").then((m) => ({ default: m.VrmViewer })), { ssr: false });
+const SCROLL_BOTTOM_THRESHOLD = 96;
+
+type ChatScrollState = {
+  isAtBottom: boolean;
+  isUserScrollingHistory: boolean;
+  hasNewMessagesBelow: boolean;
+};
 
 export function ChatScreen({ sessionId }: { sessionId: string }) {
   const { state, getBundle, sendTurn, continueAutoTurn, sendSilentContinue, skipCurrentTurn, setSessionPlayPaceMode, generateImage, generateSceneBackground, generateVoice, updateSettings, currentSmartReplies, currentContinueSuggestion, currentCharacterControl, getSessionBackground, isSceneGenerating } = useAppStore();
@@ -31,12 +38,21 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
   const [foreshadowingOpen, setForeshadowingOpen] = useState(false);
   const [infoBoxOpen, setInfoBoxOpen] = useState(false);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const [scrollState, setScrollState] = useState<ChatScrollState>({
+    isAtBottom: true,
+    isUserScrollingHistory: false,
+    hasNewMessagesBelow: false
+  });
+  const scrollContainerRef = useRef<HTMLElement | null>(null);
+  const isAtBottomRef = useRef(true);
   const endRef = useRef<HTMLDivElement | null>(null);
   const bottomPanelRef = useRef<HTMLDivElement | null>(null);
   const [bottomPanelHeight, setBottomPanelHeight] = useState(200);
   const session = state.sessions.find((item) => item.id === sessionId);
   const bundle = session ? getBundle(session.scenario_id) : null;
   const messages = state.messages.filter((message) => message.session_id === sessionId);
+  const latestMessage = messages.at(-1);
+  const messageCountRef = useRef(messages.length);
   const images = state.images.filter((image) => image.session_id === sessionId);
   const environmentState = state.sessionEnvironmentStates.find((item) => item.session_id === sessionId) ?? null;
   const characterStates = state.sessionCharacterStates.filter((item) => item.session_id === sessionId);
@@ -58,9 +74,79 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     ? (bundle?.characters.find((c) => c.model_type === "vrm" || c.model_type === "glb") ?? null)
     : null;
 
+  const updateScrollState = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    const isAtBottom = distanceFromBottom <= SCROLL_BOTTOM_THRESHOLD;
+    isAtBottomRef.current = isAtBottom;
+    setScrollState((current) => {
+      const nextHasNewMessagesBelow = isAtBottom ? false : current.hasNewMessagesBelow;
+      if (
+        current.isAtBottom === isAtBottom &&
+        current.isUserScrollingHistory === !isAtBottom &&
+        current.hasNewMessagesBelow === nextHasNewMessagesBelow
+      ) {
+        return current;
+      }
+      return {
+        isAtBottom,
+        isUserScrollingHistory: !isAtBottom,
+        hasNewMessagesBelow: nextHasNewMessagesBelow
+      };
+    });
+  }, []);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const container = scrollContainerRef.current;
+    if (container) {
+      container.scrollTo({ top: container.scrollHeight, behavior });
+    } else {
+      endRef.current?.scrollIntoView({ block: "end", behavior });
+    }
+    isAtBottomRef.current = true;
+    setScrollState({
+      isAtBottom: true,
+      isUserScrollingHistory: false,
+      hasNewMessagesBelow: false
+    });
+    window.requestAnimationFrame(updateScrollState);
+  }, [updateScrollState]);
+
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" });
-  }, [messages.length, busy]);
+    messageCountRef.current = messages.length;
+    const frame = window.requestAnimationFrame(() => scrollToBottom("auto"));
+    return () => window.cancelAnimationFrame(frame);
+  }, [scrollToBottom, sessionId]);
+
+  useEffect(() => {
+    const messageCountChanged = messages.length !== messageCountRef.current;
+    messageCountRef.current = messages.length;
+    if (!messageCountChanged) return;
+    if (isAtBottomRef.current) {
+      window.requestAnimationFrame(() => scrollToBottom("smooth"));
+      return;
+    }
+    setScrollState((current) => (current.hasNewMessagesBelow ? current : { ...current, hasNewMessagesBelow: true }));
+  }, [messages.length, scrollToBottom]);
+
+  useEffect(() => {
+    if (!latestMessage) return;
+    if (isAtBottomRef.current) {
+      window.requestAnimationFrame(() => scrollToBottom("auto"));
+    }
+  }, [latestMessage?.id, latestMessage?.content.length, scrollToBottom]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      if (isAtBottomRef.current) {
+        scrollToBottom("auto");
+      } else {
+        updateScrollState();
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [bottomPanelHeight, keyboardOffset, scrollToBottom, updateScrollState]);
 
   useEffect(() => {
     const panel = bottomPanelRef.current;
@@ -141,9 +227,13 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
   const currentScene = bundle.storyScenes.find((scene) => scene.scene_key === session.current_scene_key);
   const currentBeat = currentScene?.beats[session.current_beat_index] ?? "未設定";
   const latestQuality = state.narrativeQualityLogs.filter((log) => log.session_id === sessionId).at(-1);
+  const showBottomActions = scrollState.isAtBottom;
+  const showScrollToLatest = scrollState.isUserScrollingHistory || scrollState.hasNewMessagesBelow;
 
   const submit = async (text: string, choice?: SuggestedReply) => {
     if (!text.trim() || busy) return;
+    const wasAtBottom = isAtBottomRef.current;
+    if (wasAtBottom) scrollToBottom("smooth");
     setBusy(true);
     setAutoRunning(false);
     setError(null);
@@ -160,6 +250,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
 
   const handleContinue = async () => {
     if (busy || !session.auto_continue_allowed) return;
+    scrollToBottom("smooth");
     setBusy(true);
     setAutoRunning(false);
     setError(null);
@@ -174,6 +265,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
 
   const handleSilentContinue = async () => {
     if (busy || (session.auto_continue_count ?? 0) >= 3) return;
+    scrollToBottom("smooth");
     setBusy(true);
     setAutoRunning(false);
     setError(null);
@@ -250,7 +342,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
         className="fixed bottom-56 right-0 z-10 h-[60dvh] w-[50vw]"
       />
     )}
-    <main className="app-viewport relative flex min-h-dvh flex-col text-ink">
+    <main className="app-viewport relative flex h-dvh min-h-dvh flex-col overflow-hidden text-ink">
       <header className="sticky top-0 z-20 border-b border-white/10 bg-canvas/95 px-3 py-2 backdrop-blur-xl">
         <div className="mx-auto flex max-w-md items-center gap-2">
           <Link href="/" className="grid min-h-11 min-w-11 place-items-center rounded-md bg-panel2" aria-label="戻る">
@@ -380,7 +472,12 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
         )}
       </header>
 
-      <section className="mx-auto w-full max-w-md flex-1 overflow-y-auto" style={{ paddingBottom: bottomPanelHeight + keyboardOffset }} onPointerDown={() => busy && skipCurrentTurn()}>
+      <section
+        ref={scrollContainerRef}
+        className="mx-auto min-h-0 w-full max-w-md flex-1 overflow-y-auto"
+        style={{ paddingBottom: bottomPanelHeight + keyboardOffset }}
+        onScroll={updateScrollState}
+      >
         {error && (
           <div className="mx-3 mt-3 flex gap-2 rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
             <ShieldAlert className="h-5 w-5 shrink-0" aria-hidden />
@@ -514,6 +611,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
           characters={bundle.characters}
           images={images}
           voiceJobs={state.voiceJobs.filter((job) => job.session_id === sessionId)}
+          showAuxiliaryActions={showBottomActions}
           onGenerateEventImage={(message) => requestImage("event", message)}
           onGenerateVoice={
             state.settings.voice_enabled
@@ -529,15 +627,17 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted [animation-delay:240ms]" />
             </span>
             <span className="flex-1">...</span>
-            <button
-              type="button"
-              className="inline-flex min-h-9 items-center gap-1 rounded-md bg-canvas px-3 text-xs font-semibold text-ink"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={skipCurrentTurn}
-            >
-              <FastForward className="h-4 w-4" aria-hidden />
-              スキップ
-            </button>
+            {(state.settings.show_skip_button ?? true) && (
+              <button
+                type="button"
+                className="inline-flex min-h-9 items-center gap-1 rounded-md bg-canvas px-3 text-xs font-semibold text-ink"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={skipCurrentTurn}
+              >
+                <FastForward className="h-4 w-4" aria-hidden />
+                スキップ
+              </button>
+            )}
           </div>
         )}
         <div ref={endRef} />
@@ -548,65 +648,80 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
         className="fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-md gap-1 transition-transform duration-150"
         style={keyboardOffset ? { transform: `translateY(-${keyboardOffset}px)` } : undefined}
       >
-        <ChoiceButtons
-          choices={session.pending_choices}
-          disabled={busy}
-          showDebug={state.settings.story_director_debug_enabled && (state.settings.show_choice_effect_hints ?? false)}
-          onChoice={(choice) => {
-            if (state.settings.choice_send_behavior === "insert_into_composer") {
-              setDraft(choice.label);
-            } else {
-              void submit(choice.label, choice);
-            }
-          }}
-        />
-        <button
-          type="button"
-          onClick={handleContinue}
-          disabled={busy || !session.auto_continue_allowed || (session.play_pace_mode === "auto" && autoRunning)}
-          className={`mx-3 min-h-11 rounded-md px-3 text-sm font-semibold shadow-soft disabled:opacity-40 ${
-            session.play_pace_mode === "auto"
-              ? "bg-brand text-canvas"
-              : session.play_pace_mode === "choice_heavy"
-                ? "border border-white/10 bg-panel2 text-muted"
-                : "border border-white/10 bg-panel2 text-ink"
-          }`}
-        >
-          続きを生成
-        </button>
-        {session.play_pace_mode !== "choice_heavy" && (session.auto_continue_count ?? 0) < 3 && (
+        {showScrollToLatest && (
           <button
             type="button"
-            onClick={() => void handleSilentContinue()}
-            disabled={busy}
-            className={`mx-3 min-h-9 rounded-md px-3 text-sm disabled:opacity-40 ${
-              session.play_pace_mode === "auto"
-                ? "border border-brand/40 bg-panel text-brand"
-                : "border border-white/10 bg-panel2 text-muted"
-            }`}
+            onClick={() => scrollToBottom("smooth")}
+            className="mx-auto mb-1 inline-flex min-h-10 items-center gap-1.5 rounded-full border border-brand/30 bg-canvas/95 px-4 text-sm font-semibold text-brand shadow-soft backdrop-blur"
           >
-            {currentContinueSuggestion?.label ?? "続きを見る"}
+            <ArrowDown className="h-4 w-4" aria-hidden />
+            {scrollState.hasNewMessagesBelow ? "新着あり ↓ 最新へ" : "↓ 最新へ"}
           </button>
         )}
-        {currentSmartReplies.length > 0 && !busy && !draft && (
-          <div className="mx-3 mb-1 flex flex-wrap gap-1.5">
-            {currentSmartReplies.map((reply) => (
+        {showBottomActions && (
+          <>
+            <ChoiceButtons
+              choices={session.pending_choices}
+              disabled={busy}
+              showDebug={state.settings.story_director_debug_enabled && (state.settings.show_choice_effect_hints ?? false)}
+              onChoice={(choice) => {
+                if (state.settings.choice_send_behavior === "insert_into_composer") {
+                  setDraft(choice.label);
+                } else {
+                  void submit(choice.label, choice);
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleContinue}
+              disabled={busy || !session.auto_continue_allowed || (session.play_pace_mode === "auto" && autoRunning)}
+              className={`mx-3 min-h-11 rounded-md px-3 text-sm font-semibold shadow-soft disabled:opacity-40 ${
+                session.play_pace_mode === "auto"
+                  ? "bg-brand text-canvas"
+                  : session.play_pace_mode === "choice_heavy"
+                    ? "border border-white/10 bg-panel2 text-muted"
+                    : "border border-white/10 bg-panel2 text-ink"
+              }`}
+            >
+              続きを生成
+            </button>
+            {session.play_pace_mode !== "choice_heavy" && (session.auto_continue_count ?? 0) < 3 && (
               <button
-                key={reply.id}
                 type="button"
-                onClick={() => setDraft(reply.label)}
-                className="max-w-full rounded-full border border-white/15 bg-panel px-3 py-1.5 text-left text-xs text-muted transition-colors hover:border-brand/40 hover:text-ink [overflow-wrap:anywhere]"
+                onClick={() => void handleSilentContinue()}
+                disabled={busy}
+                className={`mx-3 min-h-9 rounded-md px-3 text-sm disabled:opacity-40 ${
+                  session.play_pace_mode === "auto"
+                    ? "border border-brand/40 bg-panel text-brand"
+                    : "border border-white/10 bg-panel2 text-muted"
+                }`}
               >
-                {reply.label}
+                {currentContinueSuggestion?.label ?? "続きを見る"}
               </button>
-            ))}
-          </div>
+            )}
+            {currentSmartReplies.length > 0 && !busy && !draft && (
+              <div className="mx-3 mb-1 flex flex-wrap gap-1.5">
+                {currentSmartReplies.map((reply) => (
+                  <button
+                    key={reply.id}
+                    type="button"
+                    onClick={() => setDraft(reply.label)}
+                    className="max-w-full rounded-full border border-white/15 bg-panel px-3 py-1.5 text-left text-xs text-muted transition-colors hover:border-brand/40 hover:text-ink [overflow-wrap:anywhere]"
+                  >
+                    {reply.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
         <Composer
           value={draft}
           disabled={busy}
           allowFreeInput={bundle.style.allow_free_input}
           imageEnabled={state.settings.image_generation_enabled && state.settings.allow_manual_image_generation}
+          showAuxiliaryActions={showBottomActions}
           onChange={setDraft}
           onSend={() => void submit(draft)}
           onGenerateImage={(kind) => void requestImage(kind)}

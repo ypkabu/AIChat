@@ -70,6 +70,16 @@ type TurnControl = {
   resolveDelay: (() => void) | null;
 };
 
+type TypewriterRevealOptions = {
+  intervalMs: number;
+  chunkSize: number;
+};
+
+type TypewriterRevealResult = {
+  skipped: boolean;
+  totalRevealTimeMs: number;
+};
+
 type AppStoreValue = {
   state: AppState;
   hydrated: boolean;
@@ -768,7 +778,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
       const requestSettings = effectiveTurnSettings(state);
       const conversationStartedAt = performance.now();
-      const revealIntervalMs = getTimelineRevealIntervalMs(requestSettings);
+      const revealOptions = getTypewriterRevealOptions(requestSettings);
       const environmentState = state.sessionEnvironmentStates.find((item) => item.session_id === sessionId) ?? null;
       const characterStates = state.sessionCharacterStates.filter((item) => item.session_id === sessionId);
       const usageTotalCostJpy = state.usageLogs.reduce((sum, log) => sum + log.estimated_cost_jpy, 0);
@@ -794,6 +804,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         choicePreferences: state.scenarioChoicePreferences?.[session.scenario_id] ?? state.choicePreferences ?? null
       };
       let displayedAiMessages = false;
+      let revealResult: TypewriterRevealResult | null = null;
       let aiMessages: Message[] = [];
       let ai: ConversationResponse | null = null;
       try {
@@ -810,9 +821,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         ai = (await response.json()) as ConversationResponse;
         aiMessages = aiResponseToMessages(ai, sessionId, bundle.characters, profile, { allowAiGeneratedUser: inputType === "choice_selected" });
 
-        if (requestSettings.timeline_reveal_enabled && revealIntervalMs > 0) {
-          await displayMessagesSequentially(aiMessages, control, revealIntervalMs, (message) => {
-            setState((current) => ({ ...current, messages: [...current.messages, message] }));
+        if (revealOptions.intervalMs > 0) {
+          revealResult = await displayMessagesSequentially(aiMessages, control, revealOptions, (updateMessages) => {
+            setState((current) => ({ ...current, messages: updateMessages(current.messages) }));
           });
         } else {
           setState((current) => ({ ...current, messages: [...current.messages, ...aiMessages] }));
@@ -858,7 +869,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         created_at: nowIso(),
         updated_at: nowIso()
       }));
-      const usage = usageFromConversation(state.userId, ai, conversationLatencyMs);
+      const usage = usageFromConversation(state.userId, ai, conversationLatencyMs, requestSettings, revealResult);
       const messagesForQuality = [...localMessages.filter((message) => message.session_id === sessionId), ...aiMessages].slice(-18);
       const messagesAfterTurn = [...localMessages.filter((message) => message.session_id === sessionId), ...aiMessages];
 
@@ -992,7 +1003,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
       const requestSettings = effectiveTurnSettings(state);
       const conversationStartedAt = performance.now();
-      const revealIntervalMs = getTimelineRevealIntervalMs(requestSettings);
+      const revealOptions = getTypewriterRevealOptions(requestSettings);
       const environmentState = state.sessionEnvironmentStates.find((item) => item.session_id === sessionId) ?? null;
       const characterStates = state.sessionCharacterStates.filter((item) => item.session_id === sessionId);
       const usageTotalCostJpy = state.usageLogs.reduce((sum, log) => sum + log.estimated_cost_jpy, 0);
@@ -1018,6 +1029,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         choicePreferences: state.scenarioChoicePreferences?.[session.scenario_id] ?? state.choicePreferences ?? null
       };
       let displayedAiMessages = false;
+      let revealResult: TypewriterRevealResult | null = null;
       let aiMessages: Message[] = [];
       let ai: ConversationResponse | null = null;
       try {
@@ -1042,9 +1054,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         ai = (await response.json()) as ConversationResponse;
         aiMessages = aiResponseToMessages(ai, sessionId, bundle.characters, profile, { allowAiGeneratedUser: false });
 
-        if (requestSettings.timeline_reveal_enabled && revealIntervalMs > 0) {
-          await displayMessagesSequentially(aiMessages, control, revealIntervalMs, (message) => {
-            setState((current) => ({ ...current, messages: [...current.messages, message] }));
+        if (revealOptions.intervalMs > 0) {
+          revealResult = await displayMessagesSequentially(aiMessages, control, revealOptions, (updateMessages) => {
+            setState((current) => ({ ...current, messages: updateMessages(current.messages) }));
           });
         } else {
           setState((current) => ({ ...current, messages: [...current.messages, ...aiMessages] }));
@@ -1074,7 +1086,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         created_at: nowIso(),
         updated_at: nowIso()
       }));
-      const usage = usageFromConversation(state.userId, ai, conversationLatencyMs);
+      const usage = usageFromConversation(state.userId, ai, conversationLatencyMs, requestSettings, revealResult);
       const messagesForQuality = [...state.messages.filter((message) => message.session_id === sessionId), ...aiMessages].slice(-18);
       const messagesAfterTurn = [...state.messages.filter((message) => message.session_id === sessionId), ...aiMessages];
 
@@ -1233,7 +1245,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
       const requestSettings = effectiveTurnSettings(state);
       const conversationStartedAt = performance.now();
-      const revealIntervalMs = getTimelineRevealIntervalMs(requestSettings);
+      const revealOptions = getTypewriterRevealOptions(requestSettings);
       const environmentState = state.sessionEnvironmentStates.find((item) => item.session_id === sessionId) ?? null;
       const characterStates = state.sessionCharacterStates.filter((item) => item.session_id === sessionId);
       const usageTotalCostJpy = state.usageLogs.reduce((sum, log) => sum + log.estimated_cost_jpy, 0);
@@ -1260,6 +1272,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       };
 
       let displayedAiMessages = false;
+      let revealResult: TypewriterRevealResult | null = null;
       let aiMessages: Message[] = [];
       let ai: ConversationResponse | null = null;
       try {
@@ -1283,9 +1296,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         ai = (await response.json()) as ConversationResponse;
         aiMessages = aiResponseToMessages(ai, sessionId, bundle.characters, profile, { allowAiGeneratedUser: false });
 
-        if (requestSettings.timeline_reveal_enabled && revealIntervalMs > 0) {
-          await displayMessagesSequentially(aiMessages, control, revealIntervalMs, (message) => {
-            setState((current) => ({ ...current, messages: [...current.messages, message] }));
+        if (revealOptions.intervalMs > 0) {
+          revealResult = await displayMessagesSequentially(aiMessages, control, revealOptions, (updateMessages) => {
+            setState((current) => ({ ...current, messages: updateMessages(current.messages) }));
           });
         } else {
           setState((current) => ({ ...current, messages: [...current.messages, ...aiMessages] }));
@@ -1297,7 +1310,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       if (!ai) throw new Error("続きの生成に失敗しました。");
       const conversationLatencyMs = Math.round(performance.now() - conversationStartedAt);
       if (activeTurnControl.current === control) activeTurnControl.current = null;
-      const usage = usageFromConversation(state.userId, ai, conversationLatencyMs);
+      const usage = usageFromConversation(state.userId, ai, conversationLatencyMs, requestSettings, revealResult);
       const messagesForQuality = [...state.messages, eventMessage, ...aiMessages].filter((m) => m.session_id === sessionId).slice(-18);
       const messagesAfterTurn = [...state.messages, eventMessage, ...aiMessages].filter((m) => m.session_id === sessionId);
 
@@ -2268,6 +2281,13 @@ function normalizeState(state: AppState): AppState {
   const styles = mergeSeededById(fresh.styles, state.styles ?? []);
   const storyScenes = mergeSeededById(fresh.storyScenes, state.storyScenes ?? []);
   const foreshadowingItems = mergeSeededById(fresh.foreshadowingItems, state.foreshadowingItems ?? []);
+  const settings: AppSettings = {
+    ...DEFAULT_SETTINGS,
+    ...state.settings,
+    streaming_display_enabled: state.settings?.streaming_display_enabled ?? state.settings?.timeline_reveal_enabled ?? DEFAULT_SETTINGS.streaming_display_enabled,
+    typewriter_enabled: state.settings?.typewriter_enabled ?? state.settings?.timeline_reveal_enabled ?? DEFAULT_SETTINGS.typewriter_enabled,
+    typewriter_speed: state.settings?.typewriter_speed ?? state.settings?.timeline_reveal_speed ?? DEFAULT_SETTINGS.typewriter_speed
+  };
   return {
     ...fresh,
     ...state,
@@ -2361,7 +2381,7 @@ function normalizeState(state: AppState): AppState {
     imageJobs: state.imageJobs ?? [],
     images: state.images ?? [],
     voiceJobs: state.voiceJobs ?? [],
-    settings: { ...DEFAULT_SETTINGS, ...state.settings },
+    settings,
     choiceEvents: state.choiceEvents ?? [],
     choicePreferences: state.choicePreferences ?? null,
     scenarioChoicePreferences: state.scenarioChoicePreferences ?? {},
@@ -2627,24 +2647,72 @@ function mergeDelta(aiDelta: RelationshipValues, choiceDelta?: Partial<Relations
 async function displayMessagesSequentially(
   messages: Message[],
   control: TurnControl,
-  intervalMs: number,
-  appendMessage: (message: Message) => void
-) {
+  options: TypewriterRevealOptions,
+  updateMessages: (updater: (messages: Message[]) => Message[]) => void
+): Promise<TypewriterRevealResult> {
+  const startedAt = performance.now();
+  let skipped = false;
   for (let index = 0; index < messages.length; index += 1) {
-    if (index > 0) {
-      await waitForTurnDelay(intervalMs, control);
+    const message = messages[index];
+    if (control.skipRequested) {
+      skipped = true;
+      updateMessages((current) => [...current, ...messages.slice(index)]);
+      break;
     }
-    appendMessage(messages[index]);
+
+    if (!shouldTypewriterReveal(message) || !message.content || options.intervalMs <= 0) {
+      updateMessages((current) => [...current, message]);
+      continue;
+    }
+
+    updateMessages((current) => [...current, { ...message, content: "" }]);
+
+    let cursor = 0;
+    while (cursor < message.content.length) {
+      await waitForTurnDelay(options.intervalMs, control);
+      if (control.skipRequested) {
+        skipped = true;
+        updateMessages((current) => [
+          ...replaceMessageById(current, message),
+          ...messages.slice(index + 1)
+        ]);
+        return {
+          skipped,
+          totalRevealTimeMs: Math.round(performance.now() - startedAt)
+        };
+      }
+
+      cursor = Math.min(message.content.length, cursor + options.chunkSize);
+      const partialMessage = { ...message, content: message.content.slice(0, cursor) };
+      updateMessages((current) => replaceMessageById(current, partialMessage));
+    }
+
+    updateMessages((current) => replaceMessageById(current, message));
   }
+  return {
+    skipped,
+    totalRevealTimeMs: Math.round(performance.now() - startedAt)
+  };
 }
 
-function getTimelineRevealIntervalMs(settings: AppSettings) {
-  if (!settings.timeline_reveal_enabled) return 0;
-  const speed = settings.timeline_reveal_speed ?? "normal";
-  if (speed === "slow") return 800;
-  if (speed === "fast") return 250;
-  if (speed === "instant") return 0;
-  return 500;
+function shouldTypewriterReveal(message: Message) {
+  if (message.role === "user" && !message.metadata?.aiGeneratedUser) return false;
+  return ["narration", "character", "event", "system", "user"].includes(message.message_type);
+}
+
+function replaceMessageById(messages: Message[], nextMessage: Message) {
+  return messages.map((message) => (message.id === nextMessage.id ? nextMessage : message));
+}
+
+function getTypewriterRevealOptions(settings: AppSettings): TypewriterRevealOptions {
+  if (!settings.timeline_reveal_enabled) return { intervalMs: 0, chunkSize: Number.MAX_SAFE_INTEGER };
+  if (settings.streaming_display_enabled === false) return { intervalMs: 0, chunkSize: Number.MAX_SAFE_INTEGER };
+  if (settings.typewriter_enabled === false) return { intervalMs: 0, chunkSize: Number.MAX_SAFE_INTEGER };
+  const speed = settings.typewriter_speed ?? settings.timeline_reveal_speed ?? "normal";
+  if (speed === "instant") return { intervalMs: 0, chunkSize: Number.MAX_SAFE_INTEGER };
+  if (speed === "fast") return { intervalMs: 12, chunkSize: 3 };
+  if (speed === "slow") return { intervalMs: 48, chunkSize: 1 };
+  return { intervalMs: 24, chunkSize: 2 };
 }
 
 function waitForTurnDelay(ms: number, control: TurnControl) {
@@ -3233,7 +3301,13 @@ function resolveRevealReadiness(status: ForeshadowingStatus, turnsSinceIntroduce
   return "not_ready";
 }
 
-function usageFromConversation(userId: ID, response: ConversationResponse, latencyMs: number): UsageLog {
+function usageFromConversation(
+  userId: ID,
+  response: ConversationResponse,
+  latencyMs: number,
+  settings?: AppSettings,
+  revealResult?: TypewriterRevealResult | null
+): UsageLog {
   return {
     id: newId("usage"),
     user_id: userId,
@@ -3252,7 +3326,15 @@ function usageFromConversation(userId: ID, response: ConversationResponse, laten
       directorUpdate: response.directorUpdate,
       mainResponse: true,
       latency_ms: latencyMs,
-      model_role: response.usage.routeHint ?? "normal"
+      model_role: response.usage.routeHint ?? "normal",
+      streaming_enabled: settings?.streaming_display_enabled ?? settings?.timeline_reveal_enabled ?? true,
+      real_streaming_enabled: settings?.real_streaming_enabled ?? false,
+      typewriter_enabled: settings?.typewriter_enabled ?? settings?.timeline_reveal_enabled ?? true,
+      typewriter_speed: settings?.typewriter_speed ?? settings?.timeline_reveal_speed ?? "normal",
+      first_token_latency_ms: latencyMs,
+      total_generation_latency_ms: latencyMs,
+      total_reveal_time_ms: revealResult?.totalRevealTimeMs ?? 0,
+      reveal_skipped: revealResult?.skipped ?? false
     },
     created_at: nowIso()
   };

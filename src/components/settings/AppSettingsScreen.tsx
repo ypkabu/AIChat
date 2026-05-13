@@ -250,20 +250,43 @@ export function AppSettingsScreen() {
         <section className="grid gap-3 rounded-md border border-white/10 bg-panel p-4">
           <h2 className="text-sm font-semibold">表示</h2>
           <ToggleRow
-            label="timeline疑似ストリーミング"
-            checked={state.settings.timeline_reveal_enabled}
-            onChange={(timeline_reveal_enabled) => updateSettings({ timeline_reveal_enabled })}
+            label="リアルタイム表示"
+            checked={(state.settings.streaming_display_enabled ?? state.settings.timeline_reveal_enabled) && state.settings.timeline_reveal_enabled}
+            onChange={(enabled) => updateSettings({ streaming_display_enabled: enabled, timeline_reveal_enabled: enabled })}
+          />
+          <ToggleRow
+            label="タイプライター表示"
+            checked={state.settings.typewriter_enabled ?? true}
+            onChange={(typewriter_enabled) => updateSettings({ typewriter_enabled })}
           />
           <SelectField
-            label="timeline表示速度"
-            value={state.settings.timeline_reveal_speed}
-            onChange={(value) => updateSettings({ timeline_reveal_speed: value as typeof state.settings.timeline_reveal_speed })}
+            label="文字表示速度"
+            value={state.settings.typewriter_speed ?? state.settings.timeline_reveal_speed}
+            onChange={(value) => updateSettings({
+              typewriter_speed: value as typeof state.settings.typewriter_speed,
+              timeline_reveal_speed: value as typeof state.settings.timeline_reveal_speed
+            })}
             options={[
-              { value: "slow", label: "Slow (800ms)" },
-              { value: "normal", label: "Normal (500ms)" },
-              { value: "fast", label: "Fast (250ms)" },
+              { value: "fast", label: "Fast (約12ms / 3文字)" },
+              { value: "normal", label: "Normal (約24ms / 2文字)" },
+              { value: "slow", label: "Slow (約48ms / 1文字)" },
               { value: "instant", label: "Instant (0ms)" }
             ]}
+          />
+          <ToggleRow
+            label="スキップボタンを表示"
+            checked={state.settings.show_skip_button ?? true}
+            onChange={(show_skip_button) => updateSettings({ show_skip_button })}
+          />
+          <ToggleRow
+            label="本物のストリーミング（実験中）"
+            checked={state.settings.real_streaming_enabled ?? false}
+            onChange={(real_streaming_enabled) => updateSettings({ real_streaming_enabled })}
+          />
+          <ToggleRow
+            label="ストリーミング失敗時に通常生成へ戻す"
+            checked={state.settings.streaming_fallback_enabled ?? true}
+            onChange={(streaming_fallback_enabled) => updateSettings({ streaming_fallback_enabled })}
           />
         </section>
 
