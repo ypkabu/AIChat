@@ -13,5 +13,6 @@ supabase/.temp/
 .vercel
 .playwright-cli/
 dev-server*.log
+.claude/
 .claude/settings.local.json
 task.md

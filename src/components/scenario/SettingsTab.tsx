@@ -74,6 +74,61 @@ export function SettingsTab() {
         <ToggleRow label="sensitive/explicit メモリを通常画面で隠す" checked={settings.hide_sensitive_memories} onChange={(hide_sensitive_memories) => updateSettings({ hide_sensitive_memories })} />
         <ToggleRow label="起動時確認ダイアログ" checked={settings.startup_age_gate} onChange={(startup_age_gate) => updateSettings({ startup_age_gate })} />
       </section>
+
+      <section className="grid gap-3 rounded-md border border-white/10 bg-panel p-4">
+        <h2 className="text-sm font-semibold">3D表示設定</h2>
+        <ToggleRow label="VRM/3D表示を有効化" checked={settings.vrm_enabled} onChange={(vrm_enabled) => updateSettings({ vrm_enabled })} />
+        <SelectField
+          label="VRM品質"
+          value={settings.vrm_quality}
+          onChange={(value) => updateSettings({ vrm_quality: value as typeof settings.vrm_quality })}
+          options={[
+            { value: "high", label: "高品質" },
+            { value: "low", label: "軽量" }
+          ]}
+        />
+        <Field label="FPS上限" type="number" value={settings.vrm_fps_limit} onChange={(value) => updateSettings({ vrm_fps_limit: Number(value) || 30 })} />
+        <ToggleRow label="影を表示" checked={settings.vrm_shadow_enabled} onChange={(vrm_shadow_enabled) => updateSettings({ vrm_shadow_enabled })} />
+        <ToggleRow label="物理揺れを有効化" checked={settings.vrm_physics_enabled} onChange={(vrm_physics_enabled) => updateSettings({ vrm_physics_enabled })} />
+      </section>
+
+      <section className="grid gap-3 rounded-md border border-white/10 bg-panel p-4">
+        <h2 className="text-sm font-semibold">Smart Reply / 選択傾向学習</h2>
+        <Field label="Smart Reply Provider" value={settings.smart_reply_provider} onChange={(smart_reply_provider) => updateSettings({ smart_reply_provider })} />
+        <Field label="Smart Reply Model" value={settings.smart_reply_model} onChange={(smart_reply_model) => updateSettings({ smart_reply_model })} />
+        <ToggleRow label="選択傾向学習を有効化" checked={settings.choice_learning_enabled} onChange={(choice_learning_enabled) => updateSettings({ choice_learning_enabled })} />
+        <ToggleRow label="選択肢の効果ヒントを表示" checked={settings.show_choice_effect_hints} onChange={(show_choice_effect_hints) => updateSettings({ show_choice_effect_hints })} />
+        <SelectField
+          label="学習反映の強さ"
+          value={settings.preference_strength}
+          onChange={(value) => updateSettings({ preference_strength: value as typeof settings.preference_strength })}
+          options={[
+            { value: "low", label: "控えめ" },
+            { value: "normal", label: "標準" },
+            { value: "high", label: "強め" }
+          ]}
+        />
+      </section>
+
+      <section className="grid gap-3 rounded-md border border-white/10 bg-panel p-4">
+        <h2 className="text-sm font-semibold">保存/エクスポート設定</h2>
+        <ToggleRow label="Story Directorデバッグを表示" checked={settings.story_director_debug_enabled} onChange={(story_director_debug_enabled) => updateSettings({ story_director_debug_enabled })} />
+        <ToggleRow label="タイムライン疑似ストリーミング" checked={settings.timeline_reveal_enabled} onChange={(timeline_reveal_enabled) => updateSettings({ timeline_reveal_enabled })} />
+        <SelectField
+          label="表示速度"
+          value={settings.timeline_reveal_speed}
+          onChange={(value) => updateSettings({ timeline_reveal_speed: value as typeof settings.timeline_reveal_speed })}
+          options={[
+            { value: "instant", label: "即時" },
+            { value: "fast", label: "速い" },
+            { value: "normal", label: "標準" },
+            { value: "slow", label: "遅い" }
+          ]}
+        />
+        <p className="rounded-md bg-panel2 px-3 py-2 text-xs leading-5 text-muted">
+          現在の保存はローカル状態とSupabase同期に対応しています。ファイルエクスポートは今後の拡張枠です。
+        </p>
+      </section>
     </div>
   );
 }

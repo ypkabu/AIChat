@@ -206,6 +206,7 @@ export async function loadAppStateFromSupabase(user: User): Promise<AppState | n
   return {
     userId: user.id,
     scenarios: scenarios as AppState["scenarios"],
+    bookmarkedScenarioIds: [],
     characters: rows(charactersResult.data).filter((item) => scenarioIds.has(String(item.scenario_id))) as AppState["characters"],
     userProfiles: rows(userProfilesResult.data).filter((item) => !item.scenario_id || scenarioIds.has(String(item.scenario_id))) as AppState["userProfiles"],
     lorebook: rows(lorebookResult.data).filter((item) => scenarioIds.has(String(item.scenario_id))) as AppState["lorebook"],
@@ -360,7 +361,7 @@ export async function saveAppStateToSupabase(state: AppState, user: User) {
     }
   }
 
-  // Lorebooks — テーブル未適用時はエラーを握りつぶす
+  // Lorebooks — 未適用テーブルだけ後方互換でスキップし、それ以外は保存失敗として扱う
   try {
     const lorebooks = normalized.lorebooks ?? [];
     if (lorebooks.length > 0) {
@@ -391,10 +392,11 @@ export async function saveAppStateToSupabase(state: AppState, user: User) {
       await upsertMany(TABLES.lorebookLinks, lorebookLinks);
     }
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    if (!msg.includes("does not exist") && !msg.includes("42P01")) {
-      console.warn("[Lorebooks] Sync failed (not a missing-table error)", error);
+    if (isMissingTableError(error)) {
+      console.warn("[Lorebooks] Sync skipped because lorebook tables are not applied yet.", error);
+      return;
     }
+    throw error;
   }
 
   async function upsert(table: string, row: Record<string, unknown>) {
@@ -441,7 +443,7 @@ async function deleteMissingRemoteRows(
   await deleteMissingByUser(supabase, TABLES.usageLogs, userId, collectIds(state.usageLogs));
   await deleteMissingByUser(supabase, TABLES.scenarios, userId, scenarioIds);
 
-  // Lorebooks — テーブル未適用時はエラーを握りつぶす
+  // Lorebooks — 未適用テーブルだけ後方互換でスキップし、それ以外は保存失敗として扱う
   try {
     const lorebooks = state.lorebooks ?? [];
     const lorebookIds = collectIds(lorebooks);
@@ -465,8 +467,12 @@ async function deleteMissingRemoteRows(
       const { error } = await query;
       if (error) throw error;
     }
-  } catch {
-    // テーブル未適用時はスキップ
+  } catch (error) {
+    if (isMissingTableError(error)) {
+      console.warn("[Lorebooks] Delete sync skipped because lorebook tables are not applied yet.", error);
+      return;
+    }
+    throw error;
   }
 }
 
@@ -526,6 +532,13 @@ function collectIds(rows: Array<{ id: string }>) {
 
 function rows(data: unknown): Array<Record<string, unknown>> {
   return Array.isArray(data) ? data as Array<Record<string, unknown>> : [];
+}
+
+function isMissingTableError(error: unknown) {
+  const record = isRecord(error) ? error : {};
+  const code = String(record.code ?? "");
+  const message = error instanceof Error ? error.message : String(record.message ?? error);
+  return code === "42P01" || message.includes("42P01") || message.includes("does not exist");
 }
 
 async function refreshGeneratedImageUrls(images: GeneratedImage[]) {

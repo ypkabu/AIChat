@@ -84,6 +84,7 @@ type AppStoreValue = {
   saveBundle: (bundle: StoryBundle) => void;
   getBundle: (scenarioId: ID) => StoryBundle | null;
   startOrResumeScenario: (scenarioId: ID) => string;
+  toggleScenarioBookmark: (scenarioId: ID) => void;
   sendTurn: (sessionId: ID, text: string, choice?: SuggestedReply) => Promise<void>;
   sendSilentContinue: (sessionId: ID) => Promise<void>;
   continueAutoTurn: (sessionId: ID, options?: { allowNonAuto?: boolean }) => Promise<void>;
@@ -171,7 +172,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
         const nextState = (await loadAppStateFromSupabase(user)) ?? (await seedRemoteWithSample(user));
         if (cancelled) return;
-        const normalized = normalizeState(nextState);
+        const normalized = mergeLocalOnlyState(normalizeState(nextState));
         lastRemoteSnapshot.current = JSON.stringify(normalized);
         setState(normalized);
         setRemote({ configured: true, user, loading: false, error: null });
@@ -468,7 +469,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const loadRemoteForUser = useCallback(async (user: NonNullable<SupabaseRemoteState["user"]>) => {
     setRemote((current) => ({ ...current, user, loading: true, error: null }));
     const nextState = (await loadAppStateFromSupabase(user)) ?? (await seedRemoteWithSample(user));
-    const normalized = normalizeState(nextState);
+    const normalized = mergeLocalOnlyState(normalizeState(nextState));
     lastRemoteSnapshot.current = JSON.stringify(normalized);
     setState(normalized);
     setRemote({ configured: true, user, loading: false, error: null });
@@ -686,6 +687,19 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     },
     [getBundle, state]
   );
+
+  const toggleScenarioBookmark = useCallback((scenarioId: ID) => {
+    setState((current) => {
+      const bookmarkedScenarioIds = current.bookmarkedScenarioIds ?? [];
+      const exists = bookmarkedScenarioIds.includes(scenarioId);
+      return {
+        ...current,
+        bookmarkedScenarioIds: exists
+          ? bookmarkedScenarioIds.filter((id) => id !== scenarioId)
+          : [...bookmarkedScenarioIds, scenarioId]
+      };
+    });
+  }, []);
 
   const sendTurn = useCallback(
     async (sessionId: ID, text: string, choice?: SuggestedReply) => {
@@ -2167,6 +2181,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       saveBundle,
       getBundle,
       startOrResumeScenario,
+      toggleScenarioBookmark,
       sendTurn,
       continueAutoTurn,
       skipCurrentTurn,
@@ -2223,6 +2238,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       signInRemoteWithEmail,
       signOutRemote,
       startOrResumeScenario,
+      toggleScenarioBookmark,
       state,
       syncRemoteNow,
       updateMemory,
@@ -2257,11 +2273,13 @@ function normalizeState(state: AppState): AppState {
     ...state,
     scenarios: scenarios.map((scenario) => ({
       ...scenario,
+      cover_image_url: scenario.cover_image_url ?? null,
       genre: scenario.genre ?? "",
       content_warnings: scenario.content_warnings ?? "",
       estimated_play_time: scenario.estimated_play_time ?? "",
       recommended_tone: scenario.recommended_tone ?? ""
     })),
+    bookmarkedScenarioIds: state.bookmarkedScenarioIds ?? [],
     characters: mergeSeededById(fresh.characters, state.characters ?? []),
     userProfiles: mergeSeededById(fresh.userProfiles, state.userProfiles ?? []),
     lorebook: mergeSeededById(fresh.lorebook, state.lorebook ?? []),
@@ -2358,6 +2376,28 @@ function normalizeState(state: AppState): AppState {
       image_count: usage.image_count ?? (usage.kind === "image" ? 1 : 0)
     }))
   };
+}
+
+function mergeLocalOnlyState(remoteState: AppState): AppState {
+  return {
+    ...remoteState,
+    bookmarkedScenarioIds: Array.from(new Set([
+      ...(remoteState.bookmarkedScenarioIds ?? []),
+      ...readLocalBookmarkedScenarioIds()
+    ]))
+  };
+}
+
+function readLocalBookmarkedScenarioIds() {
+  if (typeof localStorage === "undefined") return [] as ID[];
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return [] as ID[];
+    const parsed = JSON.parse(stored) as Partial<AppState>;
+    return Array.isArray(parsed.bookmarkedScenarioIds) ? parsed.bookmarkedScenarioIds.filter((id): id is ID => typeof id === "string") : [];
+  } catch {
+    return [] as ID[];
+  }
 }
 
 function mergeSeededById<T extends { id: string }>(seedItems: T[], stateItems: T[]) {

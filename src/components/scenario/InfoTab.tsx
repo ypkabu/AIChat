@@ -76,9 +76,23 @@ export function InfoTab({ bundle, onChange }: { bundle: StoryBundle; onChange: (
 
       <section className="grid gap-3 rounded-md border border-white/10 bg-panel p-4">
         <h2 className="text-sm font-semibold">紹介</h2>
-        <Field label="紹介文" value={bundle.scenario.description} onChange={(description) => updateScenario({ description })} multiline />
+        <Field label="カバー画像URL" value={bundle.scenario.cover_image_url ?? ""} onChange={(cover_image_url) => updateScenario({ cover_image_url })} placeholder="https://..." />
+        {bundle.scenario.cover_image_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={bundle.scenario.cover_image_url}
+            alt="カバー画像プレビュー"
+            className="h-40 w-full rounded-md border border-white/10 object-cover"
+          />
+        )}
+        <Field label="簡単な紹介" value={bundle.scenario.description} onChange={(description) => updateScenario({ description })} multiline />
         <Field label="ジャンル" value={bundle.scenario.genre} onChange={(genre) => updateScenario({ genre })} />
-        <Field label="タグ" value={joinTags(bundle.scenario.tags)} onChange={(value) => updateScenario({ tags: splitTags(value) })} />
+        <Field label="ハッシュタグ" value={joinTags(bundle.scenario.tags)} onChange={(value) => updateScenario({ tags: splitTags(value) })} />
+        <div className="rounded-md border border-white/10 bg-panel2 px-3 py-2.5">
+          <p className="text-xs font-medium text-muted">ロアブック名</p>
+          <p className="mt-1 text-sm text-ink">{bundle.lorebookLinks.length ? `${bundle.lorebookLinks.length}件連動中` : "未連動"}</p>
+        </div>
+        <Field label="紹介文" value={bundle.scenario.description} onChange={(description) => updateScenario({ description })} multiline />
         <Field label="注意事項" value={bundle.scenario.content_warnings} onChange={(content_warnings) => updateScenario({ content_warnings })} multiline />
         <Field label="プレイ時間目安" value={bundle.scenario.estimated_play_time} onChange={(estimated_play_time) => updateScenario({ estimated_play_time })} />
         <Field label="推奨トーン" value={bundle.scenario.recommended_tone} onChange={(recommended_tone) => updateScenario({ recommended_tone })} />

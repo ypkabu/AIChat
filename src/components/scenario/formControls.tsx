@@ -6,7 +6,9 @@ export function Field({
   onChange,
   placeholder,
   multiline,
-  type = "text"
+  type = "text",
+  required,
+  maxLength
 }: {
   label: string;
   value: string | number;
@@ -14,14 +16,32 @@ export function Field({
   placeholder?: string;
   multiline?: boolean;
   type?: string;
+  required?: boolean;
+  maxLength?: number;
 }) {
+  const isRequired = required ?? label.includes("*");
+  const displayLabel = label.replace(/\s*\*$/, "");
+  const textLength = typeof value === "string" ? value.length : null;
+
   return (
     <label className="grid gap-1.5">
-      <span className="text-xs font-medium text-muted">{label}</span>
+      <span className="flex items-center justify-between gap-3 text-xs font-medium text-muted">
+        <span>
+          {displayLabel}
+          {isRequired && <span className="ml-1 text-brand">*</span>}
+        </span>
+        {textLength !== null && (
+          <span className="shrink-0 text-[10px] text-muted/70">
+            {textLength}
+            {maxLength ? `/${maxLength}` : ""}
+          </span>
+        )}
+      </span>
       {multiline ? (
         <textarea
           value={value}
           placeholder={placeholder}
+          maxLength={maxLength}
           onChange={(event) => onChange(event.target.value)}
           className="min-h-28 rounded-md border border-white/10 bg-panel2 px-3 py-3 text-base text-ink outline-none focus:border-brand"
         />
@@ -30,6 +50,7 @@ export function Field({
           type={type}
           value={value}
           placeholder={placeholder}
+          maxLength={maxLength}
           onChange={(event) => onChange(event.target.value)}
           className="min-h-11 rounded-md border border-white/10 bg-panel2 px-3 text-base text-ink outline-none focus:border-brand"
         />

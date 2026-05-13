@@ -22,6 +22,7 @@ export function createBlankScenarioState(userId = APP_USER_ID) {
     user_id: userId,
     title: "新しい物語",
     description: "会話から始まる、まだ名前のないシナリオ。",
+    cover_image_url: null,
     world_setting: "",
     situation: "",
     relationship_setup: "",
@@ -104,6 +105,7 @@ export function createSampleState(userId = APP_USER_ID): AppState {
     user_id: userId,
     title: "雨音の航路",
     description: "雨の港町で、小さな朗読会の準備をしながら失われた手紙の行方を追う会話中心の物語。",
+    cover_image_url: null,
     world_setting:
       "海沿いの坂道に古い書店と灯台が残る港町、凪ヶ浦。夜になると雨音が細い路地に反響し、町の噂は手紙のように人から人へ渡っていく。",
     situation:
@@ -334,6 +336,7 @@ export function createSampleState(userId = APP_USER_ID): AppState {
   return {
     userId: userId,
     scenarios: [scenario, temari.scenario],
+    bookmarkedScenarioIds: [],
     characters: [...characters, ...temari.characters],
     userProfiles: [profile, temari.profile],
     lorebook: [...lorebook, ...temari.lorebook],
@@ -379,6 +382,7 @@ function createTemariScenarioState(userId: string, now: string) {
     title: "ぎゅっとしてよ、月の夜に",
     description:
       "初星学園プロデューサー科の新人として、拒絶の壁を作る月村手毬を担当し、食事管理、レッスン記録、過去のユニット SyngUp! の影をたどる学園アイドル攻略ドラマ。",
+    cover_image_url: null,
     world_setting:
       "初星学園。アイドル科とプロデューサー科があり、レッスン室、食堂、寮、屋上、定期公演の舞台が日常と勝負の境界になる。",
     situation:

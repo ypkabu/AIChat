@@ -255,3 +255,34 @@
 
 - [ ] Supabase に 20260512210000 マイグレーションを適用する（lorebooks / plot_lorebook_links テーブル作成）。
 - [ ] ロアブック連動時のエントリーキーワードマッチングを実機でテストする。
+
+## ロアブック/プロット作成UI + 作品詳細ページ追補 (2026-05-13)
+
+- [x] ScenarioEditor の主要タブを `プロンプト / ロアブック / スタイル / イントロ / 紹介 / 設定` に再整理。
+- [x] LorebookEditor のタブを `ロア情報 / プロットを連動 / 設定` に変更し、ロア情報タブ内で基本情報 + ロア項目CRUDを編集できるようにした。
+- [x] LorebookEntry UI をカンマ区切りキーワード、関連キャラクター、重要度、常時参照、hidden扱い、AIだけが知る情報、ネタバレ/伏線扱いに拡張。
+- [x] LorebookEditor にプロット連動タブを追加し、連動中プロット一覧、追加、連動解除、有効/無効トグル、プロット詳細導線を実装。
+- [x] IntroTab に `ナレーター / ユーザー` プレビュー切替を追加し、初回ナレーション・キャラ発言をチャット風に確認できるようにした。
+- [x] InfoTab にカバー画像URL、ハッシュタグ、連動ロア数、visibility を含む紹介編集UIを追加。
+- [x] SettingsTab に 3D表示、Smart Reply、選択傾向学習、保存/表示系設定セクションを追加。
+- [x] `/scenarios/[scenarioId]` 作品詳細ページを新規追加。カバー、サムネイル、タイトル、紹介、タグ、状況、関係性、世界観、主人公、キャラ詳細、イントロ、固定トーク開始/続行ボタン、ブックマークを実装。
+- [x] ScenarioListScreen に作品詳細ページへの導線を追加。
+- [x] Prompt Builder のロア選別条件を強化し、always_include / キーワード一致 / タイトル一致 / active character 関連 / 重要度5を最大件数内で優先するようにした。hidden_truth は引き続きプロンプト投入前に空文字化。
+- [x] scenarios に `cover_image_url` を追加する migration `20260513090000_add_scenario_detail_cover.sql` を作成。
+- [x] `npm run typecheck` / `npm run build` 成功。
+- [x] Playwright mobile check: 作品詳細→トーク開始、プロット編集タブ、ロアブック作成/項目追加/連動/解除が通過。
+- [ ] Supabase に `20260513090000_add_scenario_detail_cover.sql` を適用する。
+- [ ] 作品詳細ページのブックマークをSupabase同期する場合は専用テーブルを追加する（現状はローカル状態に永続化）。
+
+## レビュー指摘修正 (2026-05-13)
+
+- [x] `20260512210000_add_lorebook_system.sql` の lorebook / plot_lorebook_links ID と FK を client-side string ID 方針に合わせて text に修正。
+- [x] 新規 public table `lorebooks` / `plot_lorebook_links` に authenticated 向け明示 GRANT を追加。
+- [x] Supabase lorebook save/delete sync で missing table 以外のエラーを握りつぶさず throw するよう修正。
+- [x] remote load 後も localStorage の `bookmarkedScenarioIds` を merge して保持するよう修正。
+- [x] Prompt Builder の `always_include` ロアを maxItems 内で最優先確保し、残り枠を関連スコアで選ぶよう修正。
+- [x] `LorebookTab` の render 中破壊的 `sort` を `[...links].sort(...)` に修正。
+- [x] 作品詳細ページの生成画像 fallback で NSFW / blur 対象画像を使わないよう修正。
+- [x] `.claude/` を `.gitignore` に追加。
+- [x] `npm run typecheck` / `npm run build` 成功。
+- [x] 軽い Playwright 確認: 作品詳細表示、SFW cover fallback、ロアブック作成/項目追加/保存、プロット連動/解除が成功。

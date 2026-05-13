@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Save, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, ExternalLink, Link2, Plus, Save, Trash2, Upload, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "@/lib/store/AppStore";
 import type { Lorebook, LorebookEntry, LorebookEntryType } from "@/lib/domain/types";
 import { newId, nowIso, splitTags } from "@/lib/utils";
 import { uploadLorebookCover, AVATAR_MIME_TYPES } from "@/lib/supabase/storage";
 
-const TABS = ["ロア情報", "項目", "設定"] as const;
+const TABS = ["ロア情報", "プロットを連動", "設定"] as const;
 type Tab = (typeof TABS)[number];
 
 const ENTRY_TYPE_LABELS: Record<LorebookEntryType, string> = {
@@ -102,11 +102,15 @@ export function LorebookEditor({ lorebookId }: { lorebookId: string }) {
       </header>
 
       <div className="mx-auto max-w-md px-4 py-4">
+        {saved && <div className="mb-3 rounded-md border border-brand/30 bg-brand/12 px-3 py-2 text-sm text-brand">保存しました。</div>}
         {activeTab === "ロア情報" && (
-          <InfoTab lorebook={lorebook} onChange={setLorebook} />
+          <div className="grid gap-4">
+            <InfoTab lorebook={lorebook} onChange={setLorebook} />
+            <EntriesTab lorebook={lorebook} onChange={setLorebook} />
+          </div>
         )}
-        {activeTab === "項目" && (
-          <EntriesTab lorebook={lorebook} onChange={setLorebook} />
+        {activeTab === "プロットを連動" && (
+          <LinkedPlotsTab lorebook={lorebook} />
         )}
         {activeTab === "設定" && (
           <SettingsTab lorebook={lorebook} onChange={setLorebook} onDelete={handleDelete} />
@@ -181,6 +185,12 @@ function InfoTab({ lorebook, onChange }: { lorebook: Lorebook; onChange: (lb: Lo
 
 // ---- 項目タブ ----
 function EntriesTab({ lorebook, onChange }: { lorebook: Lorebook; onChange: (lb: Lorebook) => void }) {
+  const { state } = useAppStore();
+  const allCharacters = state.characters.map((character) => {
+    const scenario = state.scenarios.find((item) => item.id === character.scenario_id);
+    return { ...character, scenarioTitle: scenario?.title ?? "未分類" };
+  });
+
   const addEntry = () => {
     const now = nowIso();
     const entry: LorebookEntry = {
@@ -216,7 +226,10 @@ function EntriesTab({ lorebook, onChange }: { lorebook: Lorebook; onChange: (lb:
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted">{lorebook.entries.length}件</p>
+        <div>
+          <p className="text-sm font-semibold">ロア項目</p>
+          <p className="text-xs text-muted">{lorebook.entries.length}件。キーワードに一致したものだけ会話へ使います。</p>
+        </div>
         <button
           type="button"
           onClick={addEntry}
@@ -260,10 +273,10 @@ function EntriesTab({ lorebook, onChange }: { lorebook: Lorebook; onChange: (lb:
               </label>
 
               <LbField
-                label="キーワード（スペース区切り）"
-                value={entry.keywords.join(" ")}
+                label="キーワード（カンマ区切り）"
+                value={entry.keywords.join(", ")}
                 onChange={(value) => updateEntry(entry.id, { keywords: splitTags(value) })}
-                placeholder="灯台 手紙 組織名"
+                placeholder="旧校舎, 破れた楽譜, 星灯学園"
               />
 
               {entry.keywords.length > 0 && (
@@ -277,6 +290,30 @@ function EntriesTab({ lorebook, onChange }: { lorebook: Lorebook; onChange: (lb:
               )}
 
               <LbField label="内容" value={entry.content} onChange={(content) => updateEntry(entry.id, { content })} multiline />
+
+              <div className="grid gap-2">
+                <p className="text-xs font-medium text-muted">関連キャラクター</p>
+                {allCharacters.length === 0 ? (
+                  <p className="rounded-md bg-panel2 px-3 py-2 text-xs text-muted">登録済みキャラクターがありません。</p>
+                ) : (
+                  <div className="grid gap-1.5">
+                    {allCharacters.map((character) => (
+                      <LbToggle
+                        key={character.id}
+                        label={`${character.name} / ${character.scenarioTitle}`}
+                        checked={(entry.related_character_ids ?? []).includes(character.id)}
+                        onChange={(checked) =>
+                          updateEntry(entry.id, {
+                            related_character_ids: checked
+                              ? Array.from(new Set([...(entry.related_character_ids ?? []), character.id]))
+                              : (entry.related_character_ids ?? []).filter((id) => id !== character.id)
+                          })
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <label className="grid gap-1.5">
@@ -292,19 +329,29 @@ function EntriesTab({ lorebook, onChange }: { lorebook: Lorebook; onChange: (lb:
                 <div className="grid gap-1.5">
                   <span className="text-xs font-medium text-muted">オプション</span>
                   <div className="grid gap-1">
-                    <LbToggle label="常時参照" checked={entry.always_include} onChange={(v) => updateEntry(entry.id, { always_include: v })} />
-                    <LbToggle label="hidden（AIのみ）" checked={entry.is_hidden ?? false} onChange={(v) => updateEntry(entry.id, { is_hidden: v })} />
+                    <LbToggle label="常時参照する" checked={entry.always_include} onChange={(v) => updateEntry(entry.id, { always_include: v })} />
+                    <LbToggle label="hidden扱い" checked={entry.is_hidden ?? false} onChange={(v) => updateEntry(entry.id, { is_hidden: v })} />
+                    <LbToggle
+                      label="ネタバレ/伏線扱い"
+                      checked={(entry.entry_type ?? "other") === "foreshadowing"}
+                      onChange={(v) => updateEntry(entry.id, { entry_type: v ? "foreshadowing" : "other" })}
+                    />
                   </div>
                 </div>
               </div>
 
+              <LbField
+                label="AIだけが知る情報"
+                value={entry.hidden_truth ?? ""}
+                onChange={(hidden_truth) => updateEntry(entry.id, { hidden_truth })}
+                placeholder="回収条件まで本文には出さない真相"
+                multiline
+              />
+
               {entry.is_hidden && (
-                <LbField
-                  label="AIのみの真実（ユーザーには非表示）"
-                  value={entry.hidden_truth ?? ""}
-                  onChange={(hidden_truth) => updateEntry(entry.id, { hidden_truth })}
-                  multiline
-                />
+                <p className="rounded-md border border-brand/20 bg-brand/10 px-3 py-2 text-xs leading-5 text-brand">
+                  hidden扱いの項目は通常UIの詳細表示では伏せ、Prompt Builderでも hidden_truth は本文用プロンプトへ渡しません。
+                </p>
               )}
 
               <button
@@ -319,6 +366,108 @@ function EntriesTab({ lorebook, onChange }: { lorebook: Lorebook; onChange: (lb:
           </details>
         ))}
       </div>
+
+      <button
+        type="button"
+        onClick={addEntry}
+        className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-brand px-4 text-sm font-semibold text-canvas"
+      >
+        <Plus className="h-4 w-4" aria-hidden />
+        ロア項目を追加
+      </button>
+    </div>
+  );
+}
+
+// ---- プロット連動タブ ----
+function LinkedPlotsTab({ lorebook }: { lorebook: Lorebook }) {
+  const { state, addLorebookLink, removeLorebookLink, toggleLorebookLink } = useAppStore();
+  const links = (state.lorebookLinks ?? []).filter((link) => link.lorebook_id === lorebook.id);
+  const linkedScenarios = links
+    .map((link) => ({ link, scenario: state.scenarios.find((scenario) => scenario.id === link.plot_id) }))
+    .filter((item): item is { link: (typeof links)[number]; scenario: (typeof state.scenarios)[number] } => !!item.scenario);
+  const unlinkedScenarios = state.scenarios.filter((scenario) => !links.some((link) => link.plot_id === scenario.id));
+
+  return (
+    <div className="grid gap-4">
+      <section className="rounded-md border border-white/10 bg-panel p-4">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold">連動中のプロット</h2>
+            <p className="mt-1 text-xs leading-5 text-muted">有効な連動だけが会話中のロア検索対象になります。</p>
+          </div>
+          <span className="rounded-full bg-brand/15 px-2 py-1 text-xs text-brand">{linkedScenarios.length}件</span>
+        </div>
+
+        {linkedScenarios.length === 0 ? (
+          <p className="rounded-md border border-dashed border-white/15 px-3 py-5 text-center text-xs text-muted">
+            このロアブックはまだプロットに連動していません。
+          </p>
+        ) : (
+          <div className="grid gap-2">
+            {linkedScenarios.map(({ link, scenario }) => (
+              <div key={link.id} className="rounded-md border border-white/10 bg-panel2 p-3">
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{scenario.title}</p>
+                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted">{scenario.description || "説明はまだありません。"}</p>
+                  </div>
+                  <Link
+                    href={`/scenarios/${scenario.id}/edit`}
+                    className="grid min-h-9 min-w-9 place-items-center rounded-md bg-panel text-muted"
+                    aria-label="プロット詳細"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => removeLorebookLink(link.id)}
+                    className="grid min-h-9 min-w-9 place-items-center rounded-md bg-danger/10 text-danger"
+                    aria-label="連動解除"
+                  >
+                    <X className="h-4 w-4" aria-hidden />
+                  </button>
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-3 rounded-md bg-canvas/50 px-3 py-2">
+                  <span className="text-xs text-muted">連動を有効にする</span>
+                  <input
+                    type="checkbox"
+                    checked={link.enabled}
+                    onChange={(event) => toggleLorebookLink(link.id, event.target.checked)}
+                    className="h-5 w-5 accent-brand"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-md border border-white/10 bg-panel p-4">
+        <h2 className="mb-3 text-sm font-semibold">プロットへ追加</h2>
+        {unlinkedScenarios.length === 0 ? (
+          <p className="rounded-md bg-panel2 px-3 py-4 text-center text-xs text-muted">追加できるプロットはありません。</p>
+        ) : (
+          <div className="grid gap-2">
+            {unlinkedScenarios.map((scenario) => (
+              <div key={scenario.id} className="flex items-center gap-2 rounded-md border border-white/10 bg-panel2 p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{scenario.title}</p>
+                  <p className="mt-1 line-clamp-2 text-xs text-muted">{scenario.description || "説明はまだありません。"}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => addLorebookLink(scenario.id, lorebook.id)}
+                  className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-md bg-brand px-3 text-sm font-semibold text-canvas"
+                >
+                  <Link2 className="h-4 w-4" aria-hidden />
+                  連動
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -374,13 +523,22 @@ function LbField({
   type?: string;
 }) {
   const cls = "w-full rounded-md border border-white/10 bg-panel2 px-3 py-2.5 text-sm text-ink placeholder:text-muted/50 focus:border-brand/50 focus:outline-none";
+  const stringValue = String(value);
+  const required = label.includes("*");
+  const displayLabel = label.replace(/\s*\*$/, "");
   return (
     <label className="grid gap-1.5">
-      <span className="text-xs font-medium text-muted">{label}</span>
+      <span className="flex items-center justify-between gap-3 text-xs font-medium text-muted">
+        <span>
+          {displayLabel}
+          {required && <span className="ml-1 text-brand">*</span>}
+        </span>
+        <span className="shrink-0 text-[10px] text-muted/70">{stringValue.length}</span>
+      </span>
       {multiline ? (
         <textarea
           className={`${cls} min-h-24 resize-y`}
-          value={String(value)}
+          value={stringValue}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
         />
@@ -388,7 +546,7 @@ function LbField({
         <input
           type={type ?? "text"}
           className={cls}
-          value={String(value)}
+          value={stringValue}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
         />

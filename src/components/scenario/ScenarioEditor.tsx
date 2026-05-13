@@ -12,10 +12,8 @@ import { StyleTab } from "./StyleTab";
 import { IntroTab } from "./IntroTab";
 import { InfoTab } from "./InfoTab";
 import { SettingsTab } from "./SettingsTab";
-import { StoryDirectorTab } from "./StoryDirectorTab";
-import { ForeshadowingTab } from "./ForeshadowingTab";
 
-const tabs = ["プロンプト", "ロアブック", "Story Director", "伏線", "スタイル", "イントロ", "紹介", "設定"] as const;
+const tabs = ["プロンプト", "ロアブック", "スタイル", "イントロ", "紹介", "設定"] as const;
 type Tab = (typeof tabs)[number];
 
 export function ScenarioEditor({ scenarioId }: { scenarioId: string }) {
@@ -89,8 +87,6 @@ export function ScenarioEditor({ scenarioId }: { scenarioId: string }) {
         {saved && <div className="mb-3 rounded-md border border-brand/30 bg-brand/12 px-3 py-2 text-sm text-brand">保存しました。</div>}
         {activeTab === "プロンプト" && <PromptTab bundle={bundle} onChange={setBundle} />}
         {activeTab === "ロアブック" && <LorebookTab bundle={bundle} onChange={setBundle} />}
-        {activeTab === "Story Director" && <StoryDirectorTab bundle={bundle} onChange={setBundle} />}
-        {activeTab === "伏線" && <ForeshadowingTab bundle={bundle} onChange={setBundle} />}
         {activeTab === "スタイル" && <StyleTab bundle={bundle} onChange={setBundle} />}
         {activeTab === "イントロ" && <IntroTab bundle={bundle} onChange={setBundle} />}
         {activeTab === "紹介" && <InfoTab bundle={bundle} onChange={setBundle} />}

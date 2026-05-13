@@ -13,7 +13,7 @@ export function LorebookTab({ bundle, onChange }: { bundle: StoryBundle; onChang
   const links = bundle.lorebookLinks ?? [];
 
   // 連動中のロアブック
-  const linkedLorebooks = links
+  const linkedLorebooks = [...links]
     .sort((a, b) => a.priority - b.priority)
     .map((link) => ({ link, lorebook: lorebooks.find((lb) => lb.id === link.lorebook_id) }))
     .filter((item): item is { link: PlotLorebookLink; lorebook: Lorebook } => !!item.lorebook);
@@ -206,10 +206,10 @@ export function LorebookTab({ bundle, onChange }: { bundle: StoryBundle; onChang
                 <LegacyEntryTypeSelect value={entry.entry_type ?? "other"} onChange={(entry_type) => updateLegacyEntry(entry.id, { entry_type: entry_type as LorebookEntry["entry_type"] })} />
                 <Field label="内容" value={entry.content} onChange={(content) => updateLegacyEntry(entry.id, { content })} multiline />
                 <Field
-                  label="キーワード（スペース区切り）"
-                  value={entry.keywords.join(" ")}
+                  label="キーワード（カンマ区切り）"
+                  value={entry.keywords.join(", ")}
                   onChange={(value) => updateLegacyEntry(entry.id, { keywords: splitTags(value) })}
-                  placeholder="灯台 手紙 組織名"
+                  placeholder="灯台, 手紙, 組織名"
                 />
                 <Field
                   label="重要度 1〜5"

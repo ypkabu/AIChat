@@ -68,7 +68,7 @@ export function buildConversationPrompt(input: PromptBuildInput): PromptBuildRes
     ...input.lorebook,
     ...(input.linkedLorebookEntries ?? []).map((e) => ({ ...e, hidden_truth: "" }))
   ];
-  const selectedLore = selectRelevantLore(allLoreEntries, currentSceneKeywords, maxLoreItems);
+  const selectedLore = selectRelevantLore(allLoreEntries, currentSceneKeywords, maxLoreItems, currentSceneCharacterIds);
   const selectedMemories = selectRelevantMemories(input.memories, currentSceneKeywords, currentSceneCharacters, maxMemoryItems, session.id);
   const recentPromptMessages = recentMessages.slice(-maxRecentMessages);
   const selectedSummaries = selectRecentSummaries(input.storySummaries ?? [], session.id);
@@ -524,21 +524,50 @@ function buildQualityRule(session: PromptBuildInput["session"]) {
   ].join("\n");
 }
 
-function selectRelevantLore(lorebook: LorebookEntry[], contextKeywords: string, maxItems: number) {
+function selectRelevantLore(
+  lorebook: LorebookEntry[],
+  contextKeywords: string,
+  maxItems: number,
+  currentCharacterIds: string[] = []
+) {
+  if (maxItems <= 0) return [];
   const haystack = contextKeywords.toLowerCase();
+  const currentCharacterIdSet = new Set(currentCharacterIds);
 
-  return lorebook
+  const scored = lorebook
     .map((entry) => {
       const keywordHits = entry.keywords.filter((keyword) => keyword.length > 0 && haystack.includes(keyword.toLowerCase())).length;
       const titleHit = entry.title && haystack.includes(entry.title.toLowerCase());
-      const score = (entry.always_include ? 30 : 0) + entry.importance * 4 + keywordHits * 25 + (titleHit ? 18 : 0);
-      return { entry, score, matched: entry.always_include || keywordHits > 0 || titleHit };
+      const characterHit = (entry.related_character_ids ?? []).some((id) => currentCharacterIdSet.has(id));
+      const highImportance = (entry.importance ?? 0) >= 5;
+      const score =
+        (entry.always_include ? 30 : 0) +
+        entry.importance * 4 +
+        keywordHits * 25 +
+        (titleHit ? 18 : 0) +
+        (characterHit ? 16 : 0) +
+        (highImportance ? 10 : 0);
+      return { entry, score, matched: entry.always_include || keywordHits > 0 || titleHit || characterHit || highImportance };
     })
-    .filter(({ matched }) => matched)
+    .filter(({ matched }) => matched);
+
+  const alwaysIncluded = scored
+    .filter(({ entry }) => entry.always_include)
     .sort((a, b) => b.score - a.score)
-    .slice(0, maxItems)
-    // hidden_truth は絶対にプロンプトに含めない
-    .map(({ entry }) => ({ ...entry, hidden_truth: "" }));
+    .slice(0, maxItems);
+  const alwaysIds = new Set(alwaysIncluded.map(({ entry }) => entry.id));
+  const remainingSlots = Math.max(0, maxItems - alwaysIncluded.length);
+  const contextual = scored
+    .filter(({ entry }) => !alwaysIds.has(entry.id))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, remainingSlots);
+
+  return [...alwaysIncluded, ...contextual].map(({ entry }) => sanitizeLoreForPrompt(entry));
+}
+
+function sanitizeLoreForPrompt(entry: LorebookEntry): LorebookEntry {
+  // hidden_truth は絶対にプロンプトに含めない
+  return { ...entry, hidden_truth: "" };
 }
 
 const MEMORY_TYPE_BONUS: Partial<Record<string, number>> = {

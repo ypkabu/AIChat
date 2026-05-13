@@ -4,7 +4,7 @@
 
 -- 1. lorebooks テーブル（ユーザーレベルの再利用可能なロアブック）
 create table public.lorebooks (
-  id uuid primary key default gen_random_uuid(),
+  id text primary key default gen_random_uuid()::text,
   user_id uuid not null references auth.users(id) on delete cascade,
   title text not null default '新しいロアブック',
   short_description text not null default '',
@@ -22,6 +22,8 @@ create trigger lorebooks_set_updated_at
 
 alter table public.lorebooks enable row level security;
 
+grant select, insert, update, delete on table public.lorebooks to authenticated;
+
 create policy "lorebooks_select" on public.lorebooks
   for select to authenticated using (user_id = auth.uid());
 create policy "lorebooks_insert" on public.lorebooks
@@ -33,7 +35,7 @@ create policy "lorebooks_delete" on public.lorebooks
 
 -- 2. lorebook_entries に新カラムを追加
 alter table public.lorebook_entries
-  add column if not exists lorebook_id uuid references public.lorebooks(id) on delete cascade,
+  add column if not exists lorebook_id text references public.lorebooks(id) on delete cascade,
   add column if not exists is_hidden boolean not null default false,
   add column if not exists hidden_truth text not null default '',
   add column if not exists entry_type text not null default 'other'
@@ -43,9 +45,9 @@ create index if not exists lorebook_entries_lorebook_id_idx on public.lorebook_e
 
 -- 3. plot_lorebook_links テーブル
 create table public.plot_lorebook_links (
-  id uuid primary key default gen_random_uuid(),
-  plot_id uuid not null references public.scenarios(id) on delete cascade,
-  lorebook_id uuid not null references public.lorebooks(id) on delete cascade,
+  id text primary key default gen_random_uuid()::text,
+  plot_id text not null references public.scenarios(id) on delete cascade,
+  lorebook_id text not null references public.lorebooks(id) on delete cascade,
   enabled boolean not null default true,
   priority integer not null default 0,
   created_at timestamptz not null default now(),
@@ -56,6 +58,8 @@ create index plot_lorebook_links_plot_id_idx on public.plot_lorebook_links(plot_
 create index plot_lorebook_links_lorebook_id_idx on public.plot_lorebook_links(lorebook_id);
 
 alter table public.plot_lorebook_links enable row level security;
+
+grant select, insert, update, delete on table public.plot_lorebook_links to authenticated;
 
 -- RLS: シナリオのオーナーが操作できる（scenarios テーブル経由）
 create policy "plot_lorebook_links_select" on public.plot_lorebook_links

@@ -1080,3 +1080,69 @@
 
 - `npx tsc --noEmit` → エラーなし
 - `npx next build` → 全ページビルド成功
+
+## 2026-05-13 (ロアブック/プロットUI追補 + 作品詳細ページ)
+
+### 実装内容
+
+- ロアブック編集を `ロア情報 / プロットを連動 / 設定` の3タブへ再整理し、ロア情報タブ内にロア項目CRUDを統合した。
+- ロア項目にカンマ区切りキーワード、関連キャラクター、重要度、常時参照、hidden扱い、AIだけが知る情報、ネタバレ/伏線扱いの入力導線を追加した。
+- ロアブック側からプロット連動を追加/解除/有効化できる `プロットを連動` タブを実装した。
+- プロット編集を `プロンプト / ロアブック / スタイル / イントロ / 紹介 / 設定` のスマホ横スクロールタブへ整理した。
+- イントロ編集に `ナレーター / ユーザー` プレビューを追加し、開始時の見え方を確認できるようにした。
+- 作品詳細ページ `/scenarios/[scenarioId]` を追加し、カバー、キャラサムネ、タグ、状況、関係性、世界観、主人公プロフィール、キャラ詳細、チャット風イントロ、固定トーク開始/続行ボタン、ブックマークを実装した。
+- Prompt Builder の関連ロア選別を、キーワード一致だけでなく active character 関連と重要度5も候補に入れるよう強化した。hidden_truth は本文用プロンプト投入前に空文字化する既存方針を維持。
+- scenarios に `cover_image_url` を追加する migration `20260513090000_add_scenario_detail_cover.sql` を作成した。
+
+### 触ったファイル
+
+- `src/components/lorebook/LorebookEditor.tsx`
+- `src/components/scenario/ScenarioEditor.tsx`
+- `src/components/scenario/ScenarioDetailScreen.tsx`
+- `src/components/scenario/ScenarioListScreen.tsx`
+- `src/components/scenario/InfoTab.tsx`
+- `src/components/scenario/IntroTab.tsx`
+- `src/components/scenario/SettingsTab.tsx`
+- `src/components/scenario/LorebookTab.tsx`
+- `src/components/scenario/formControls.tsx`
+- `src/lib/domain/types.ts`
+- `src/lib/domain/sampleData.ts`
+- `src/lib/store/AppStore.tsx`
+- `src/lib/supabase/repository.ts`
+- `src/lib/promptBuilder.ts`
+- `src/app/scenarios/[scenarioId]/page.tsx`
+- `supabase/migrations/20260513090000_add_scenario_detail_cover.sql`
+- `Docs/AI_TASKS.md`
+- `Docs/AI_WORKLOG.md`
+
+### 確認
+
+- `npm run typecheck` → エラーなし。
+- `npm run build` → 全ページビルド成功。
+- `npm run lint` → package.json に lint script が無いため実行不可。
+- Playwright mobile check → 作品詳細→トーク開始、プロット編集タブ、ロアブック作成/項目追加/連動/解除の3テストが成功。
+- dev server → `http://127.0.0.1:3000` で起動確認。
+
+### 注意点
+
+- `20260513090000_add_scenario_detail_cover.sql` は作成のみ。Supabase 実DBへの適用は未実施。
+- 作品詳細ページのブックマークは現状ローカル状態に保存される。Supabase同期が必要なら専用テーブル追加が次作業。
+
+## 2026-05-13 (レビュー指摘修正)
+
+### 実装内容
+
+- `20260512210000_add_lorebook_system.sql` の `lorebooks.id`, `lorebook_entries.lorebook_id`, `plot_lorebook_links.id/plot_id/lorebook_id` を text ID 方針へ修正した。
+- `lorebooks` / `plot_lorebook_links` に authenticated 向け `grant select, insert, update, delete` を追加した。
+- Supabase lorebook 同期で missing table (`42P01` / `does not exist`) だけを後方互換スキップし、それ以外は throw して remote save failure に出すようにした。
+- Supabase remote load 時、localStorage にある `bookmarkedScenarioIds` を remote state に merge して保持するようにした。
+- Prompt Builder の lore 選別を修正し、`always_include` を maxItems 内で先に確保してから残り枠を関連スコアで埋めるようにした。
+- `LorebookTab` の render 中 `links.sort` を `[...links].sort` に変更した。
+- 作品詳細ページの cover fallback が生成済み NSFW / blur 対象画像を拾わないようにした。
+- `.claude/` を `.gitignore` に追加した。
+
+### 確認
+
+- `npm run typecheck` → 成功。
+- `npm run build` → 成功。
+- Playwright inline check → 作品詳細表示、SFW cover fallback、ロアブック作成/項目追加/保存、プロット連動/解除が成功。

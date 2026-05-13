@@ -167,6 +167,7 @@ export type Scenario = {
   user_id: ID;
   title: string;
   description: string;
+  cover_image_url?: string | null;
   world_setting: string;
   situation: string;
   relationship_setup: string;
@@ -871,6 +872,7 @@ export type StoryBundle = {
 export type AppState = {
   userId: ID;
   scenarios: Scenario[];
+  bookmarkedScenarioIds: ID[];
   characters: ScenarioCharacter[];
   userProfiles: UserProfile[];
   lorebook: LorebookEntry[];
