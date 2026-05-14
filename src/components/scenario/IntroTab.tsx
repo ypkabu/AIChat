@@ -151,10 +151,13 @@ export function IntroTab({ bundle, onChange }: { bundle: StoryBundle; onChange: 
 
 function IntroPreview({ bundle, mode }: { bundle: StoryBundle; mode: "narrator" | "user" }) {
   const profile = bundle.userProfiles.find((item) => item.id === bundle.intro.user_profile_id) ?? bundle.userProfiles[0];
-  const introLines = [
-    bundle.intro.initial_narration || bundle.intro.start_text,
-    ...bundle.intro.initial_character_messages.map((message) => message.content).filter(Boolean)
-  ].filter(Boolean);
+  const introTimeline = bundle.intro.initial_timeline?.filter((item) => item.content.trim()) ?? [];
+  const introLines = introTimeline.length
+    ? introTimeline.map((item) => item.content)
+    : [
+        bundle.intro.initial_narration || bundle.intro.start_text,
+        ...bundle.intro.initial_character_messages.map((message) => message.content).filter(Boolean)
+      ].filter(Boolean);
 
   return (
     <div className="grid gap-3 rounded-md bg-canvas/60 p-3">
@@ -165,13 +168,27 @@ function IntroPreview({ bundle, mode }: { bundle: StoryBundle; mode: "narrator" 
       )}
       {mode === "user" && (
         <div className="grid gap-2">
-          {bundle.intro.initial_narration && (
+          {!introTimeline.length && bundle.intro.initial_narration && (
             <p className="rounded-md bg-panel2 px-3 py-3 text-sm leading-7 text-muted">{bundle.intro.initial_narration}</p>
           )}
-          {bundle.intro.initial_character_messages.map((message, index) => {
-            const character = bundle.characters.find((item) => item.id === message.characterId);
+          {(introTimeline.length
+            ? introTimeline
+            : bundle.intro.initial_character_messages.map((message) => ({
+                type: "character" as const,
+                characterName: message.characterName,
+                content: message.content
+              }))
+          ).map((message, index) => {
+            if (message.type !== "character") {
+              return (
+                <p key={`${message.type}-${index}`} className="rounded-md bg-panel2 px-3 py-3 text-sm leading-7 text-muted">
+                  {message.content}
+                </p>
+              );
+            }
+            const character = bundle.characters.find((item) => item.name === message.characterName);
             return (
-              <div key={`${message.characterId}-${index}`} className="flex items-start gap-2">
+              <div key={`${message.characterName}-${index}`} className="flex items-start gap-2">
                 <div
                   className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold text-canvas"
                   style={{ backgroundColor: character?.display_color ?? "#8b5cf6" }}

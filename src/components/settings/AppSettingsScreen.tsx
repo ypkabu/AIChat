@@ -570,6 +570,7 @@ const IMAGE_MODELS: Record<string, Array<{ value: string; label: string }>> = {
     { value: "mock-private-nsfw-image",  label: "Mock NSFW" }
   ],
   runpod: [
+    { value: "black-forest-labs-flux-1-dev", label: "FLUX.1 Dev — Runpod公式" },
     { value: "illustriousXL_v01",        label: "IllustriousXL v0.1 — アニメ推奨" },
     { value: "animagine-xl-3.1",         label: "Animagine XL 3.1" },
     { value: "flux1-schnell",            label: "FLUX.1 Schnell — 高速" },
@@ -586,7 +587,7 @@ const IMAGE_MODELS: Record<string, Array<{ value: string; label: string }>> = {
 
 const DEFAULT_IMAGE_MODEL: Record<string, string> = {
   mock:    "mock-standard-image",
-  runpod:  "illustriousXL_v01",
+  runpod:  "black-forest-labs-flux-1-dev",
   comfyui: "illustriousXL_v01.safetensors"
 };
 

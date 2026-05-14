@@ -1603,3 +1603,58 @@
 
 - Runpod smoke jobは作成できたが、確認時点では `IN_QUEUE` のまま。残高/credits、GPU worker起動、または初回pull待ちが原因の可能性がある。
 - APIキーなどのsecret値は出力していない。
+
+## 2026-05-14 (本番ストリーミング / 初期AI彼女サンプル / Runpod公式Flux)
+
+### 実施内容
+
+- `intro_settings.initial_timeline` を追加し、作品詳細・イントロタブ・トーク開始時の初期メッセージで narration / character timeline をそのまま使えるようにした。
+- 初期サンプルトーク「ちっちゃなザコザコ先輩、可愛すぎ〜♡」を追加した。高梨みう、一歩プロフィール、AI彼女モード用style、初期timeline、選択肢、ロア、Story Director scene、伏線を含む。
+- `real_streaming_enabled` を新規デフォルトONにし、既存Supabase `app_settings` もONへ更新した。
+- OpenAI stream routeで、改行なしまたはJSON文字列化されたNDJSON断片が末尾に来ても raw JSON を本文に表示せず、timeline / choices / director として抽出する処理を追加した。
+- 生成中は Story Choices / Smart Reply / Continue Button / 画像生成補助アクションを隠し、スキップと入力欄disableだけが残るようにした。
+- 既存localStorageやremote stateのサンプルキャラクターにVRM URLが欠けている場合でも、seed済みVRM設定を補完する正規化を追加した。
+- `VrmViewer` にBounding Boxベースの自動フィットを入れ、サンプルVRMが画角外に出にくいようカメラと配置を調整した。
+- Runpod公式 `black-forest-labs-flux-1-dev` endpointの `output.image_url` 形式に対応し、Vercel production env の画像生成先を公式Flux runsyncへ切り替えた。
+- デフォルト画像設定と本番DBの `app_settings` を `standard_image_provider=runpod` / `standard_image_model=black-forest-labs-flux-1-dev` へ変更した。
+
+### 触ったファイル
+
+- `src/app/api/story/[storyId]/chat/stream/route.ts`
+- `src/components/chat/ChatScreen.tsx`
+- `src/components/scenario/IntroTab.tsx`
+- `src/components/scenario/ScenarioDetailScreen.tsx`
+- `src/components/settings/AppSettingsScreen.tsx`
+- `src/components/vrm/VrmViewer.tsx`
+- `src/lib/ai/image/runpodAdapter.ts`
+- `src/lib/domain/constants.ts`
+- `src/lib/domain/sampleData.ts`
+- `src/lib/domain/types.ts`
+- `src/lib/store/AppStore.tsx`
+- `supabase/migrations/20260514113000_add_intro_initial_timeline.sql`
+- `supabase/migrations/20260514114000_enable_real_streaming_default.sql`
+- `supabase/migrations/20260514115000_configure_runpod_public_flux.sql`
+
+### 確認
+
+- `npx supabase db query --linked -f supabase/migrations/20260514113000_add_intro_initial_timeline.sql` → 成功。
+- `npx supabase db query --linked -f supabase/migrations/20260514114000_enable_real_streaming_default.sql` → 成功。
+- `npx supabase db query --linked -f supabase/migrations/20260514115000_configure_runpod_public_flux.sql` → 成功。
+- `npx supabase migration repair --linked --status applied 20260514113000 20260514114000 20260514115000` → 各migrationをappliedに修復。
+- `npx supabase migration list --linked` → `20260514113000` / `20260514114000` / `20260514115000` がremote applied。
+- `npm run typecheck` → 成功。
+- `npm run lint` → 成功。
+- `npm run build` → 成功。
+- Browser確認: `/scenarios/sample-miu-teasing-girlfriend` で状況/関係性/世界観/主人公/キャラ/イントロが表示され、hidden_truthは表示されない。
+- Browser確認: 初期サンプルトークを開始し、初期timelineが narration / character の順で表示される。
+- Browser確認: 選択肢送信後、実OpenAI streamで入力中/スキップが出て、完了後にtimeline itemと選択肢が表示される。
+- Browser確認: `続きを見る` でユーザー発話なしに続きが生成され、手動継続が自動3回制限で止まらない。
+- Browser確認: 生成中はStory Choices / Continue / 画像生成メニューが消え、入力欄はdisableされたまま保持される。
+- Browser確認: 旧保存データ由来のraw JSONは残るが、新規生成分ではraw JSONが追加されず、choices/directorが通常UIへ分離されることを確認。
+- Browser確認: 設定画面で3D表示ON、`/models/AvatarSample_M.vrm` がキャラクター設定に入っていることを確認。
+
+### 注意点
+
+- 既存ブラウザlocalStorageに旧バグ由来のraw JSONメッセージが残っている場合、保存済み本文そのものは削除しない。新規生成では漏れない。
+- VRMは静的配信と設定URLを確認済み。見た目/負荷は最終的にiPhone実機で確認する。
+- Runpod公式FluxはAPI直叩きのsmokeでは成功済み。production deploy後にアプリの `/api/images/generate` 経由で再確認する。

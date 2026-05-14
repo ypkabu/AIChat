@@ -403,3 +403,19 @@
 - [x] 旧バグで保存済みの raw JSON / provider schema error メッセージを、チャット表示時に短い説明文へ畳むよう修正。データ自体は削除しない。
 - [x] `npm test` を `npm run typecheck` に接続し、最低限のテストコマンドを実行可能にした。
 - [x] 既存 lint warning 19件を解消し、`npm run lint` が warning 0 / error 0 で通る状態にした。
+
+## 本番ストリーミング / 初期AI彼女サンプル / Runpod公式Flux (2026-05-14)
+
+- [x] `intro_settings.initial_timeline` を追加し、初期イントロを narration / character timeline item として保存・詳細プレビュー・チャット開始へ反映。
+- [x] 「ちっちゃなザコザコ先輩、可愛すぎ〜♡」を初期サンプルトークとして追加。全員18歳以上、創作系大学/専門学校、AI彼女モード、Continue Button / Story Choices / Smart Reply向け設定を含めた。
+- [x] 新規デフォルトで `real_streaming_enabled=true` にし、Supabase `app_settings` 既存行にも本物ストリーミングONを反映する migration を適用。
+- [x] OpenAI stream route が改行なし/JSON文字列化されたNDJSON断片を返した場合でも、本文にraw JSONを漏らさず timeline / choices / director として抽出するよう修正。
+- [x] 生成中は Story Choices / Smart Reply / Continue Button / 画像生成補助アクションを非表示にし、スキップと入力欄disableだけを表示するよう修正。
+- [x] 旧localStorage/remote stateのサンプルキャラクターにVRM URLが欠けていても、seed済み `model_url=/models/AvatarSample_M.vrm` などを補完するよう正規化を追加。
+- [x] VRM読み込み後にモデルのBounding Boxから自動フィットし、サンプルVRMが画角外に出にくいよう調整。
+- [x] Runpod公式 `black-forest-labs-flux-1-dev` runsync endpointの返却形式に対応し、Vercel production envのRunpod画像生成先を公式Fluxへ切替。
+- [x] デフォルト画像設定と本番 `app_settings` を `standard_image_provider=runpod` / `standard_image_model=black-forest-labs-flux-1-dev` へ更新。
+- [x] Supabase migration `20260514113000` / `20260514114000` / `20260514115000` を本番DBへ適用し、migration history を applied に修復。
+- [x] ローカルBrowser確認: 初期サンプル詳細、トーク開始、選択肢送信、実OpenAI stream/typewriter、生成中スキップ、補助アクション非表示、Continue Button継続を確認。
+- [ ] 本番デプロイ後、production `/api/images/generate` がRunpod公式Fluxの画像URLを返すことを再確認する。
+- [ ] iPhone実機でPWA再追加後、VRM表示の見た目・負荷・入力欄のキーボード追従を確認する。

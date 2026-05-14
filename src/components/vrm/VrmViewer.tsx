@@ -95,8 +95,8 @@ export function VrmViewer({
 
     // Camera
     const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 20);
-    camera.position.set(0, 1.35, 1.5);
-    camera.lookAt(0, 1.2, 0);
+    camera.position.set(0, 1.15, 2.2);
+    camera.lookAt(0, 1.05, 0);
     cameraRef.current = camera;
 
     // Resize observer
@@ -131,12 +131,7 @@ export function VrmViewer({
     if (vrm) {
       const sceneObj = vrm.scene as THREE.Object3D & { isVrmScene?: boolean };
       sceneObj.isVrmScene = true;
-      // Apply scale
-      const scale = character?.vrm_scale ?? 1.0;
-      sceneObj.scale.setScalar(scale);
-      // Apply position offset
-      const pos = character?.vrm_position_json;
-      if (pos) sceneObj.position.set(pos.x, pos.y, pos.z);
+      fitVrmToCamera(sceneObj, character);
       scene.add(sceneObj);
     }
   }, [vrm, character]);
@@ -279,4 +274,35 @@ export function VrmViewer({
       />
     </div>
   );
+}
+
+function fitVrmToCamera(sceneObj: THREE.Object3D, character: ScenarioCharacter | null) {
+  sceneObj.position.set(0, 0, 0);
+  sceneObj.scale.setScalar(character?.vrm_scale ?? 1);
+  sceneObj.updateMatrixWorld(true);
+
+  const box = new THREE.Box3().setFromObject(sceneObj);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+
+  if (size.y > 0) {
+    const targetHeight = 1.55;
+    const scale = (character?.vrm_scale ?? 1) * (targetHeight / size.y);
+    sceneObj.scale.setScalar(scale);
+    sceneObj.updateMatrixWorld(true);
+  }
+
+  const fittedBox = new THREE.Box3().setFromObject(sceneObj);
+  const center = new THREE.Vector3();
+  fittedBox.getCenter(center);
+  sceneObj.position.x -= center.x;
+  sceneObj.position.y -= fittedBox.min.y - 0.02;
+  sceneObj.position.z -= center.z;
+
+  const offset = character?.vrm_position_json;
+  if (offset) {
+    sceneObj.position.x += offset.x;
+    sceneObj.position.y += offset.y;
+    sceneObj.position.z += offset.z;
+  }
 }

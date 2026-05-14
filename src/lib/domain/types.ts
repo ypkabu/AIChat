@@ -331,6 +331,7 @@ export type IntroSettings = {
   start_situation: string;
   appearing_character_ids: ID[];
   user_profile_id: ID;
+  initial_timeline?: TimelineItem[];
   initial_narration: string;
   initial_character_messages: Array<{
     characterId: ID;

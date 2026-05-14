@@ -660,36 +660,39 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         updated_at: now
       };
 
-      const openingMessages: Message[] = [
-        {
-          id: newId("msg"),
-          session_id: sessionId,
-          role: "assistant",
-          message_type: "narration",
-          speaker_type: "narrator",
-          speaker_name: "ナレーション",
-          speaker_avatar_url: null,
-          content: bundle.intro.initial_narration || bundle.intro.start_text,
-          metadata: {},
-          created_at: now
-        },
-        ...bundle.intro.initial_character_messages.map((item) => {
-          const character = bundle.characters.find((candidate) => candidate.id === item.characterId || candidate.name === item.characterName);
-          return {
-            id: newId("msg"),
-            session_id: sessionId,
-            role: "assistant" as const,
-            message_type: "character" as const,
-            speaker_type: "character" as const,
-            speaker_id: character?.id ?? item.characterId,
-            speaker_name: character?.name ?? item.characterName,
-            speaker_avatar_url: character?.avatar_url ?? null,
-            content: item.content,
-            metadata: {},
-            created_at: nowIso()
-          };
-        })
-      ];
+      const introTimeline = bundle.intro.initial_timeline?.filter((item) => item.content.trim()) ?? [];
+      const openingMessages: Message[] = introTimeline.length
+        ? introTimeline.map((item) => timelineItemToMessage(item, sessionId, bundle.characters, profile, {}, nowIso()))
+        : [
+            {
+              id: newId("msg"),
+              session_id: sessionId,
+              role: "assistant",
+              message_type: "narration",
+              speaker_type: "narrator",
+              speaker_name: "ナレーション",
+              speaker_avatar_url: null,
+              content: bundle.intro.initial_narration || bundle.intro.start_text,
+              metadata: {},
+              created_at: now
+            },
+            ...bundle.intro.initial_character_messages.map((item) => {
+              const character = bundle.characters.find((candidate) => candidate.id === item.characterId || candidate.name === item.characterName);
+              return {
+                id: newId("msg"),
+                session_id: sessionId,
+                role: "assistant" as const,
+                message_type: "character" as const,
+                speaker_type: "character" as const,
+                speaker_id: character?.id ?? item.characterId,
+                speaker_name: character?.name ?? item.characterName,
+                speaker_avatar_url: character?.avatar_url ?? null,
+                content: item.content,
+                metadata: {},
+                created_at: nowIso()
+              };
+            })
+          ];
 
       const relationships = bundle.characters.map((character) => createRelationship(state.userId, scenarioId, character.id));
       const environmentState = createEnvironmentState(state.userId, session, bundle, now);
@@ -2315,6 +2318,30 @@ function normalizeState(state: AppState): AppState {
     typewriter_enabled: state.settings?.typewriter_enabled ?? state.settings?.timeline_reveal_enabled ?? DEFAULT_SETTINGS.typewriter_enabled,
     typewriter_speed: state.settings?.typewriter_speed ?? state.settings?.timeline_reveal_speed ?? DEFAULT_SETTINGS.typewriter_speed
   };
+  const characters = mergeSeededById(fresh.characters, state.characters ?? []).map((character) => {
+    const seeded = fresh.characters.find((item) => item.id === character.id);
+    if (!seeded) return character;
+    return {
+      ...character,
+      model_type: character.model_type ?? seeded.model_type ?? null,
+      model_url: character.model_url ?? seeded.model_url ?? null,
+      default_expression: character.default_expression ?? seeded.default_expression ?? null,
+      default_motion: character.default_motion ?? seeded.default_motion ?? null,
+      vrm_scale: character.vrm_scale ?? seeded.vrm_scale ?? null,
+      vrm_position_json: character.vrm_position_json ?? seeded.vrm_position_json ?? null,
+      expression_map_json: character.expression_map_json ?? seeded.expression_map_json ?? null,
+      motion_map_json: character.motion_map_json ?? seeded.motion_map_json ?? null,
+      look_at_user_enabled: character.look_at_user_enabled ?? seeded.look_at_user_enabled ?? true,
+      blink_enabled: character.blink_enabled ?? seeded.blink_enabled ?? true,
+      idle_motion_enabled: character.idle_motion_enabled ?? seeded.idle_motion_enabled ?? true,
+      license_note: character.license_note ?? seeded.license_note ?? null,
+      app_use_allowed: character.app_use_allowed ?? seeded.app_use_allowed ?? false,
+      modification_allowed: character.modification_allowed ?? seeded.modification_allowed ?? false,
+      nsfw_allowed: character.nsfw_allowed ?? seeded.nsfw_allowed ?? false,
+      redistribution_allowed: character.redistribution_allowed ?? seeded.redistribution_allowed ?? false
+    };
+  });
+
   return {
     ...fresh,
     ...state,
@@ -2327,7 +2354,7 @@ function normalizeState(state: AppState): AppState {
       recommended_tone: scenario.recommended_tone ?? ""
     })),
     bookmarkedScenarioIds: state.bookmarkedScenarioIds ?? [],
-    characters: mergeSeededById(fresh.characters, state.characters ?? []),
+    characters,
     userProfiles: mergeSeededById(fresh.userProfiles, state.userProfiles ?? []),
     lorebook: mergeSeededById(fresh.lorebook, state.lorebook ?? []),
     intros: mergeSeededById(fresh.intros, state.intros ?? []),

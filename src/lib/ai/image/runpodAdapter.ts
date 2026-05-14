@@ -67,18 +67,33 @@ export class RunpodImageBackend implements ImageBackend {
       ? "worst quality, low quality, blurry, bad anatomy"
       : "nsfw, nude, explicit, worst quality, low quality, blurry, bad anatomy";
 
-    const payload = {
-      input: {
-        workflow: buildRunpodComfyWorkflow({
-          prompt: request.prompt,
-          negativePrompt,
-          width: size.width,
-          height: size.height,
-          steps,
-          seed: Math.floor(Math.random() * 2 ** 48)
-        })
-      }
-    };
+    const publicFluxEndpoint = isRunpodPublicFluxEndpoint(this.endpointUrl, this.modelName);
+    const seed = Math.floor(Math.random() * 2 ** 48);
+    const payload = publicFluxEndpoint
+      ? {
+          input: {
+            prompt: request.prompt,
+            negative_prompt: negativePrompt,
+            width: size.width,
+            height: size.height,
+            num_inference_steps: Math.max(4, Math.min(steps, 28)),
+            guidance: 3.5,
+            seed,
+            image_format: "png"
+          }
+        }
+      : {
+          input: {
+            workflow: buildRunpodComfyWorkflow({
+              prompt: request.prompt,
+              negativePrompt,
+              width: size.width,
+              height: size.height,
+              steps,
+              seed
+            })
+          }
+        };
 
     const response = await fetch(this.endpointUrl, {
       method: "POST",
@@ -222,11 +237,12 @@ type RunpodJobResponse = {
   id?: string;
   status: string;
   output?: {
-    images?: string[];
+    images?: Array<string | { data?: string; image?: string; image_url?: string; type?: string }>;
     image?: string;
     image_url?: string;
     message?: string;
     status?: string;
+    cost?: number;
   };
   error?: string;
 };
@@ -269,16 +285,28 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isRunpodPublicFluxEndpoint(endpointUrl: string, modelName: string) {
+  const normalized = `${endpointUrl} ${modelName}`.toLowerCase();
+  return normalized.includes("black-forest-labs-flux-1-dev") || normalized.includes("runpod-public-flux");
+}
+
 function extractRunpodImageUrl(output?: {
-  images?: string[];
+  images?: Array<string | { data?: string; image?: string; image_url?: string; type?: string }>;
   image?: string;
   image_url?: string;
   message?: string;
 }) {
-  const raw = output?.images?.[0] ?? output?.image ?? output?.image_url ?? output?.message ?? "";
+  const firstImage = output?.images?.[0];
+  const raw = getRunpodImageCandidate(firstImage) ?? output?.image_url ?? output?.image ?? output?.message ?? "";
   if (!raw) return "";
   if (raw.startsWith("data:image/") || raw.startsWith("http://") || raw.startsWith("https://")) {
     return raw;
   }
   return `data:image/png;base64,${raw}`;
+}
+
+function getRunpodImageCandidate(value: string | { data?: string; image?: string; image_url?: string; type?: string } | undefined) {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  return value.image_url ?? value.image ?? value.data ?? null;
 }

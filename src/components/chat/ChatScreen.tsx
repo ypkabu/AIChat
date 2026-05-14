@@ -236,7 +236,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
   const currentScene = bundle.storyScenes.find((scene) => scene.scene_key === session.current_scene_key);
   const currentBeat = currentScene?.beats[session.current_beat_index] ?? "未設定";
   const latestQuality = state.narrativeQualityLogs.filter((log) => log.session_id === sessionId).at(-1);
-  const showBottomActions = scrollState.isAtBottom;
+  const showBottomActions = scrollState.isAtBottom && !busy;
   const showScrollToLatest = scrollState.isUserScrollingHistory || scrollState.hasNewMessagesBelow;
 
   const submit = async (text: string, choice?: SuggestedReply) => {

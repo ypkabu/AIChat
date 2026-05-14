@@ -235,8 +235,14 @@ export async function POST(request: Request, context: { params: Promise<{ storyI
             if (emitted === "choices") choicesSent = true;
             if (emitted === "director_update") directorSent = true;
           } else {
-            send("timeline_item", { type: "narration", characterName: null, content: trailing } satisfies TimelineItem);
-            sentTimelineCount += 1;
+            const loose = emitLooseNdjsonObjects(trailing, send);
+            sentTimelineCount += loose.timelineItems;
+            choicesSent = choicesSent || loose.choices;
+            directorSent = directorSent || loose.directorUpdate;
+            if (!loose.emitted && loose.remaining.trim()) {
+              send("timeline_item", { type: "narration", characterName: null, content: loose.remaining.trim() } satisfies TimelineItem);
+              sentTimelineCount += 1;
+            }
           }
         }
 
@@ -308,10 +314,91 @@ function parseOpenAISseFrame(frame: string): OpenAIStreamEvent | null {
 
 function parseNdjsonLine(line: string) {
   try {
-    return JSON.parse(line) as Record<string, unknown>;
+    const parsed = JSON.parse(line) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
   } catch {
     return null;
   }
+}
+
+function emitLooseNdjsonObjects(text: string, send: (event: string, data: unknown) => void) {
+  const source = unwrapJsonString(text);
+  const result = {
+    timelineItems: 0,
+    choices: false,
+    directorUpdate: false,
+    emitted: false,
+    remaining: source
+  };
+  let searchIndex = 0;
+  let consumedUntil = 0;
+
+  while (searchIndex < source.length) {
+    const start = source.indexOf("{", searchIndex);
+    if (start === -1) break;
+    const end = findJsonObjectEnd(source, start);
+    if (end === -1) break;
+    const parsed = parseNdjsonLine(source.slice(start, end + 1));
+    if (parsed) {
+      const emitted = emitNdjsonObject(parsed, send);
+      if (emitted) {
+        result.emitted = true;
+        consumedUntil = end + 1;
+        if (emitted === "timeline_item") result.timelineItems += 1;
+        if (emitted === "choices") result.choices = true;
+        if (emitted === "director_update") result.directorUpdate = true;
+      }
+    }
+    searchIndex = end + 1;
+  }
+
+  result.remaining = result.emitted ? source.slice(consumedUntil) : source;
+  return result;
+}
+
+function unwrapJsonString(text: string) {
+  const trimmed = text.trim();
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (typeof parsed === "string") return parsed;
+  } catch {
+    // Keep the original text unless it clearly looks like a JSON string fragment.
+  }
+  if (trimmed.includes('\\"type\\"')) {
+    return trimmed.replace(/^"|"$/g, "").replace(/\\"/g, '"').replace(/\\n/g, "\n");
+  }
+  return trimmed;
+}
+
+function findJsonObjectEnd(text: string, start: number) {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = true;
+    } else if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+
+  return -1;
 }
 
 function emitNdjsonObject(raw: Record<string, unknown>, send: (event: string, data: unknown) => void) {

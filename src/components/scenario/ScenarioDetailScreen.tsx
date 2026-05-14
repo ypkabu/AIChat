@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Bookmark, Edit3, Home, Menu, MessageCircle, Play, Star, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useAppStore } from "@/lib/store/AppStore";
-import type { ScenarioCharacter } from "@/lib/domain/types";
+import type { ScenarioCharacter, TimelineItem } from "@/lib/domain/types";
 
 export function ScenarioDetailScreen({ scenarioId }: { scenarioId: string }) {
   const router = useRouter();
@@ -40,8 +40,21 @@ export function ScenarioDetailScreen({ scenarioId }: { scenarioId: string }) {
     safeScenarioImage?.thumbnail_url ||
     safeScenarioImage?.public_url ||
     null;
+  const introTimeline = intro.initial_timeline?.filter((item) => item.content.trim()) ?? [];
   const introMessages = intro.initial_character_messages.filter((message) => message.content.trim());
-  const shownIntroMessages = introExpanded ? introMessages : introMessages.slice(0, 2);
+  const introPreviewItems: TimelineItem[] = introTimeline.length
+    ? introTimeline
+    : [
+        ...(intro.initial_narration || intro.start_text
+          ? [{ type: "narration" as const, characterName: null, content: intro.initial_narration || intro.start_text }]
+          : []),
+        ...introMessages.map((message) => ({
+          type: "character" as const,
+          characterName: message.characterName,
+          content: message.content
+        }))
+      ];
+  const shownIntroItems = introExpanded ? introPreviewItems : introPreviewItems.slice(0, 4);
   const modeLabel = style.mode_optimization === "girlfriend" ? "AI彼女" : style.mode_optimization === "story" ? "物語" : "標準";
 
   const begin = () => {
@@ -181,26 +194,28 @@ export function ScenarioDetailScreen({ scenarioId }: { scenarioId: string }) {
           <section className="rounded-md border border-white/10 bg-panel p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="text-sm font-semibold">イントロ</h2>
-              {introMessages.length > 2 && (
+              {introPreviewItems.length > 4 && (
                 <button type="button" onClick={() => setIntroExpanded((value) => !value)} className="text-xs font-semibold text-brand">
                   {introExpanded ? "閉じる" : "もっと見る"}
                 </button>
               )}
             </div>
             <div className="grid gap-3">
-              {(intro.initial_narration || intro.start_text) && (
-                <p className="rounded-md bg-panel2 px-3 py-3 text-sm leading-7 text-muted">
-                  {intro.initial_narration || intro.start_text}
-                </p>
-              )}
-              {shownIntroMessages.map((message, index) => {
-                const character = characters.find((item) => item.id === message.characterId);
+              {shownIntroItems.map((item, index) => {
+                if (item.type === "narration" || item.type === "system" || item.type === "event") {
+                  return (
+                    <p key={`${item.type}-${index}`} className="rounded-md bg-panel2 px-3 py-3 text-sm leading-7 text-muted">
+                      {item.content}
+                    </p>
+                  );
+                }
+                const character = characters.find((candidate) => candidate.name === item.characterName);
                 return (
-                  <div key={`${message.characterId}-${index}`} className="flex items-start gap-2">
+                  <div key={`${item.characterName}-${index}`} className="flex items-start gap-2">
                     <CharacterThumb character={character} />
                     <div className="min-w-0 max-w-[82%] rounded-md bg-panel2 px-3 py-2.5">
-                      <p className="mb-1 text-[11px] text-muted">{character?.name ?? message.characterName}</p>
-                      <p className="whitespace-pre-wrap text-sm leading-6">{message.content}</p>
+                      <p className="mb-1 text-[11px] text-muted">{character?.name ?? item.characterName}</p>
+                      <p className="whitespace-pre-wrap text-sm leading-6">{item.content}</p>
                     </div>
                   </div>
                 );
