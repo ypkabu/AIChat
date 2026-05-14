@@ -46,7 +46,7 @@ export function VrmViewer({
   const characterRef = useRef<ScenarioCharacter | null>(null);
   const characterControlRef = useRef<CharacterControl | null>(null);
 
-  const modelUrl = character?.model_type === "vrm" || character?.model_type === "glb"
+  const modelUrl = character?.model_type === "vrm"
     ? (character.model_url ?? null)
     : null;
 

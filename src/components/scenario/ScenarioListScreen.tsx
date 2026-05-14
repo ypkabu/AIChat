@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Edit3, Info, Play, Plus, Users } from "lucide-react";
 import { useAppStore } from "@/lib/store/AppStore";
 import { formatDate } from "@/lib/utils";
@@ -84,8 +85,8 @@ export function ScenarioListScreen() {
                 </div>
 
                 <div className="mb-4 grid grid-cols-2 gap-2 text-xs text-muted">
-                  <span>更新: {formatDate(scenario.updated_at)}</span>
-                  <span>最終プレイ: {formatDate(scenario.last_played_at)}</span>
+                  <span>更新: <ClientDate value={scenario.updated_at} /></span>
+                  <span>最終プレイ: <ClientDate value={scenario.last_played_at} /></span>
                   <span>進行: {scenario.progress_percent}%</span>
                   <span className="inline-flex items-center gap-1">
                     <Users className="h-3.5 w-3.5" aria-hidden />
@@ -128,4 +129,12 @@ export function ScenarioListScreen() {
       <BottomNav active="home" />
     </main>
   );
+}
+
+function ClientDate({ value }: { value?: string | null }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  return mounted ? <>{formatDate(value)}</> : <>--/-- --:--</>;
 }

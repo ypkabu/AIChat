@@ -19,5 +19,9 @@ export function GET() {
     buildTime: process.env.NEXT_PUBLIC_BUILD_TIME ?? process.env.BUILD_TIME ?? "unknown",
     environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "development",
     supabaseProjectRefTail: maskSupabaseProjectRef(process.env.NEXT_PUBLIC_SUPABASE_URL)
+  }, {
+    headers: {
+      "Cache-Control": "no-store"
+    }
   });
 }

@@ -1,6 +1,7 @@
 import { Avatar } from "@/components/ui/Avatar";
 import type { Message, VoiceGenerationJob } from "@/lib/domain/types";
 import { VoiceButton } from "./VoiceButton";
+import { displayContent } from "./displayContent";
 
 export function CharacterBubble({
   message,
@@ -13,7 +14,8 @@ export function CharacterBubble({
   voiceJob?: VoiceGenerationJob | null;
   onGenerateVoice?: (() => void) | null;
 }) {
-  const lines = message.content.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const content = displayContent(message.content);
+  const lines = content.split(/\n+/).map((line) => line.trim()).filter(Boolean);
   const hasQuotedLine = lines.some(isDialogueLine);
 
   return (
@@ -31,7 +33,7 @@ export function CharacterBubble({
               ))}
             </div>
           ) : (
-            message.content
+            content
           )}
         </div>
         {onGenerateVoice && (

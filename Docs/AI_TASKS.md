@@ -253,7 +253,7 @@
 
 ## 後続課題 (ロアブックシステム)
 
-- [ ] Supabase に 20260512210000 マイグレーションを適用する（lorebooks / plot_lorebook_links テーブル作成）。
+- [x] Supabase に 20260512210000 / 20260512220000 マイグレーション相当を適用する（lorebooks / plot_lorebook_links テーブル作成、lorebook_entries.lorebook_id 追加、scenario_id nullable化）。
 - [ ] ロアブック連動時のエントリーキーワードマッチングを実機でテストする。
 
 ## ロアブック/プロット作成UI + 作品詳細ページ追補 (2026-05-13)
@@ -362,5 +362,18 @@
 - [x] `/api/debug/version` を追加し、appVersion / commitHash / buildTime / environment / Supabase project ref末尾を secret なしで確認できるようにした。
 - [x] `npm run typecheck` / `npm run build` 成功。
 - [ ] `npm run lint` は package.json に lint script がないため未実行。
-- [ ] 本番Supabaseには `20260512210000_add_lorebook_system.sql`, `20260512220000_lorebook_entries_nullable_scenario_id.sql`, `20260513090000_add_scenario_detail_cover.sql` 相当が未反映。lorebooks / plot_lorebook_links / scenarios.cover_image_url 等の適用が必要。
+- [x] 本番Supabaseへ `20260512210000_add_lorebook_system.sql`, `20260512220000_lorebook_entries_nullable_scenario_id.sql`, `20260513090000_add_scenario_detail_cover.sql` 相当を適用/確認済み。lorebooks / plot_lorebook_links / lorebook_entries.lorebook_id / scenarios.cover_image_url は REST で到達確認済み。
 - [ ] スマホ版とローカル版の完全同期確認には、本番URLの `/api/debug/version` とローカル `/api/debug/version` の commitHash 比較、PWAキャッシュ削除、Vercel env 確認が必要。
+
+## 手動設定チェックのAI修正対応 (2026-05-14)
+
+- [x] `.env.example` に `GEMINI_API_KEY` と debug metadata env を追加。
+- [x] `npm run lint` を追加し、ESLint flat config を導入。既存コードに強く当たる React Compiler 系 rule は現段階では無効化し、lint を実行可能な品質ゲートにした。
+- [x] Next.js を `16.2.6` へ更新し、`npm audit --omit=dev` の高severity advisoryを解消。
+- [x] PWA service worker cache を `story-roleplay-pwa-v2` に更新し、APIレスポンスをキャッシュしないよう修正。update waiting 時の更新バナーを追加。
+- [x] 設定画面に App Version パネルを追加し、version / commit / build / env / Supabase ref末尾 / service worker status / PWA cache clear を表示。
+- [x] GLBは現ビューア未対応のため、作成UIでは準備中として選択不可にし、ChatScreen / VrmViewer も VRM のみ対象に修正。
+- [x] ScenarioListScreen の日付表示 hydration mismatch を、client mount後に日付描画する形で修正。
+- [x] Supabase lorebook migration を冪等化し、将来の適用/再適用に強くした。
+- [x] 本番Supabaseの `scenarios.cover_image_url` は REST で存在確認済み。
+- [x] 本番Supabaseの `lorebooks` / `plot_lorebook_links` / `lorebook_entries.lorebook_id` を `supabase db query --linked` で適用し、`supabase migration repair --status applied` で `20260512210000` / `20260512220000` を applied に整えた。REST で各対象が HTTP 200 になることを確認済み。

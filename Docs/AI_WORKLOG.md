@@ -1389,3 +1389,74 @@
 - Vercel CLI と Supabase CLI はローカル PATH に存在しなかったため、hosting側 env 一覧や CLI migration diff は未確認。Supabase 実DBは MCP で確認済み。
 - 本番DBへの DDL は未実行。未適用 migration は既存データ削除を含まないが、RLS policy と nullable 変更を含むため、適用前に影響範囲を確認する。
 - `.env.local` の値は確認したが、secret/APIキーの中身は出力していない。
+
+## 2026-05-14 (手動設定チェックのAI修正対応)
+
+### 実装内容
+
+- `.env.example` に `GEMINI_API_KEY` と `/api/debug/version` 用の `GIT_COMMIT_SHA` / `BUILD_TIME` / `NEXT_PUBLIC_BUILD_TIME` を追加した。
+- `npm run lint` を追加し、ESLint flat config を導入した。既存コードを大きく崩さないため、React Compiler 系の `set-state-in-effect` / `immutability` と `no-explicit-any` は一旦無効化した。
+- Next.js を `16.2.6` へ更新し、`npm audit --omit=dev` の高severity advisoryを解消した。
+- `public/sw.js` を `story-roleplay-pwa-v2` に更新し、API routeをService Worker cache対象から除外した。
+- `AppProviders` に Service Worker update waiting 検知と更新バナーを追加した。
+- 設定画面に `AppVersionPanel` を追加し、app version / commit / build / environment / Supabase ref末尾 / Service Worker状態 / PWA cache clear を確認できるようにした。
+- GLBは現状の `@pixiv/three-vrm` ビューアではVRM metadata必須のため、作成UIで準備中扱いにし、ChatScreen / VrmViewer も VRM のみを表示対象にした。
+- ScenarioListScreen の日付表示を client mount後に描画し、sample state の時刻差による hydration mismatch を修正した。
+- Supabase lorebook migration SQLを冪等化し、将来の再適用でpolicy/trigger/table作成が衝突しにくい形にした。
+
+### 触ったファイル
+
+- `.env.example`
+- `package.json`
+- `package-lock.json`
+- `eslint.config.mjs`
+- `public/sw.js`
+- `src/components/AppProviders.tsx`
+- `src/components/settings/AppVersionPanel.tsx`
+- `src/components/settings/AppSettingsScreen.tsx`
+- `src/components/scenario/PromptTab.tsx`
+- `src/components/scenario/ScenarioListScreen.tsx`
+- `src/components/chat/ChatScreen.tsx`
+- `src/components/vrm/VrmViewer.tsx`
+- `supabase/migrations/20260512210000_add_lorebook_system.sql`
+- `supabase/migrations/20260512220000_lorebook_entries_nullable_scenario_id.sql`
+- `Docs/AI_TASKS.md`
+- `Docs/AI_WORKLOG.md`
+
+### 確認
+
+- `npm run lint` → 成功（warning 21件、error 0）。
+- `npm run typecheck` → 成功。
+- `npm run build` → 成功。
+- `npm audit --omit=dev` → 0 vulnerabilities。
+- Browser確認: `/settings` で App Version / PWA Cache Clear 表示、console error 0。
+- Browser確認: `/` で hydration mismatch が再発しないことを確認、console error 0。
+- REST確認: `scenarios.cover_image_url` は HTTP 200。`lorebooks` / `plot_lorebook_links` は HTTP 404、`lorebook_entries.lorebook_id` select は HTTP 400 のため未反映。
+
+### 注意点
+
+- Supabase MCP は lorebook migration 適用時に再認証/unknown tool状態になり、psql は password未設定で接続不可だったため、本番DBの standalone lorebook 系 migration は未適用。
+- `20260513090000_add_scenario_detail_cover.sql` 相当は MCP 適用が成功し、RESTでも `cover_image_url` の存在を確認した。
+- `npm run lint` は通るが既存warningが残っている。今後、未使用変数・`img`最適化・hook deps warningは小さく分けて潰す。
+
+## 2026-05-14 (Supabase lorebook migration 適用)
+
+### 実施内容
+
+- Supabase CLI が linked project に接続できることを確認し、remote migration list を取得した。
+- `20260512210000_add_lorebook_system.sql` を `npx supabase db query --linked -f ...` で本番Supabaseへ適用した。
+- `20260512220000_lorebook_entries_nullable_scenario_id.sql` を `npx supabase db query --linked -f ...` で本番Supabaseへ適用した。
+- `npx supabase migration repair --linked --status applied 20260512210000 20260512220000` を実行し、対象2本の migration history を applied に整えた。
+
+### 確認
+
+- information_schema 確認: `lorebooks.id` / `plot_lorebook_links.id` / `plot_lorebook_links.plot_id` / `plot_lorebook_links.lorebook_id` は text、`lorebook_entries.lorebook_id` は text nullable、`lorebook_entries.scenario_id` は nullable。
+- REST確認: `/rest/v1/lorebooks?select=id&limit=0` → HTTP 200。
+- REST確認: `/rest/v1/plot_lorebook_links?select=id&limit=0` → HTTP 200。
+- REST確認: `/rest/v1/lorebook_entries?select=scenario_id,lorebook_id&limit=0` → HTTP 200。
+- `npx supabase migration list --linked` で `20260512210000` / `20260512220000` が remote applied として表示されることを確認。
+
+### 注意点
+
+- `db push --dry-run` は remote-only migration `20260513210602` / `20260514050244` が存在するため停止する。今回は対象2本だけを直接SQL適用し、history repair で整合を取った。
+- APIキーやDBパスワードなどのsecret値は出力していない。

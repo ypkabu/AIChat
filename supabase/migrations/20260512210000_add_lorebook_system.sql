@@ -3,7 +3,7 @@
 -- ============================================================
 
 -- 1. lorebooks テーブル（ユーザーレベルの再利用可能なロアブック）
-create table public.lorebooks (
+create table if not exists public.lorebooks (
   id text primary key default gen_random_uuid()::text,
   user_id uuid not null references auth.users(id) on delete cascade,
   title text not null default '新しいロアブック',
@@ -14,8 +14,9 @@ create table public.lorebooks (
   updated_at timestamptz not null default now()
 );
 
-create index lorebooks_user_id_idx on public.lorebooks(user_id);
+create index if not exists lorebooks_user_id_idx on public.lorebooks(user_id);
 
+drop trigger if exists lorebooks_set_updated_at on public.lorebooks;
 create trigger lorebooks_set_updated_at
   before update on public.lorebooks
   for each row execute function public.set_updated_at();
@@ -24,12 +25,16 @@ alter table public.lorebooks enable row level security;
 
 grant select, insert, update, delete on table public.lorebooks to authenticated;
 
+drop policy if exists "lorebooks_select" on public.lorebooks;
 create policy "lorebooks_select" on public.lorebooks
   for select to authenticated using (user_id = auth.uid());
+drop policy if exists "lorebooks_insert" on public.lorebooks;
 create policy "lorebooks_insert" on public.lorebooks
   for insert to authenticated with check (user_id = auth.uid());
+drop policy if exists "lorebooks_update" on public.lorebooks;
 create policy "lorebooks_update" on public.lorebooks
   for update to authenticated using (user_id = auth.uid());
+drop policy if exists "lorebooks_delete" on public.lorebooks;
 create policy "lorebooks_delete" on public.lorebooks
   for delete to authenticated using (user_id = auth.uid());
 
@@ -44,7 +49,7 @@ alter table public.lorebook_entries
 create index if not exists lorebook_entries_lorebook_id_idx on public.lorebook_entries(lorebook_id);
 
 -- 3. plot_lorebook_links テーブル
-create table public.plot_lorebook_links (
+create table if not exists public.plot_lorebook_links (
   id text primary key default gen_random_uuid()::text,
   plot_id text not null references public.scenarios(id) on delete cascade,
   lorebook_id text not null references public.lorebooks(id) on delete cascade,
@@ -54,23 +59,27 @@ create table public.plot_lorebook_links (
   unique (plot_id, lorebook_id)
 );
 
-create index plot_lorebook_links_plot_id_idx on public.plot_lorebook_links(plot_id);
-create index plot_lorebook_links_lorebook_id_idx on public.plot_lorebook_links(lorebook_id);
+create index if not exists plot_lorebook_links_plot_id_idx on public.plot_lorebook_links(plot_id);
+create index if not exists plot_lorebook_links_lorebook_id_idx on public.plot_lorebook_links(lorebook_id);
 
 alter table public.plot_lorebook_links enable row level security;
 
 grant select, insert, update, delete on table public.plot_lorebook_links to authenticated;
 
 -- RLS: シナリオのオーナーが操作できる（scenarios テーブル経由）
+drop policy if exists "plot_lorebook_links_select" on public.plot_lorebook_links;
 create policy "plot_lorebook_links_select" on public.plot_lorebook_links
   for select to authenticated
   using (exists (select 1 from public.scenarios s where s.id = plot_id and s.user_id = auth.uid()));
+drop policy if exists "plot_lorebook_links_insert" on public.plot_lorebook_links;
 create policy "plot_lorebook_links_insert" on public.plot_lorebook_links
   for insert to authenticated
   with check (exists (select 1 from public.scenarios s where s.id = plot_id and s.user_id = auth.uid()));
+drop policy if exists "plot_lorebook_links_update" on public.plot_lorebook_links;
 create policy "plot_lorebook_links_update" on public.plot_lorebook_links
   for update to authenticated
   using (exists (select 1 from public.scenarios s where s.id = plot_id and s.user_id = auth.uid()));
+drop policy if exists "plot_lorebook_links_delete" on public.plot_lorebook_links;
 create policy "plot_lorebook_links_delete" on public.plot_lorebook_links
   for delete to authenticated
   using (exists (select 1 from public.scenarios s where s.id = plot_id and s.user_id = auth.uid()));

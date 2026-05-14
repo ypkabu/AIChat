@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "lint": "eslint .",
+    "test": "npm run typecheck",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "agentmemory": "npx -y @agentmemory/agentmemory",
@@ -17,7 +19,7 @@
     "@types/three": "^0.184.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",
-    "next": "16.2.4",
+    "next": "^16.2.6",
     "react": "19.2.5",
     "react-dom": "19.2.5",
     "three": "^0.184.0",
@@ -28,6 +30,8 @@
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "autoprefixer": "^10.4.20",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.6",
     "postcss": "^8.5.14",
     "tailwindcss": "^3.4.17",
     "typescript": "^6.0.3"

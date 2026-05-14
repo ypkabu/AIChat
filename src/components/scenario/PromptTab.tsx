@@ -159,12 +159,17 @@ export function PromptTab({ bundle, onChange }: { bundle: StoryBundle; onChange:
                       <select
                         className="min-h-10 rounded-md border border-white/10 bg-panel2 px-3 text-sm text-ink"
                         value={character.model_type ?? "none"}
-                        onChange={(e) => updateCharacter(character.id, { model_type: e.target.value === "none" ? undefined : e.target.value as "vrm" | "glb" })}
+                        onChange={(e) => updateCharacter(character.id, { model_type: e.target.value === "none" ? undefined : "vrm" })}
                       >
                         <option value="none">なし</option>
                         <option value="vrm">VRM</option>
-                        <option value="glb">GLB</option>
+                        <option value="glb" disabled>GLB (準備中)</option>
                       </select>
+                      {character.model_type === "glb" && (
+                        <p className="text-[11px] leading-4 text-accent">
+                          現在のビューアはVRMメタデータ必須です。GLBはVRMへ変換してから使用してください。
+                        </p>
+                      )}
                     </div>
                     <Field
                       label="スケール"
@@ -216,7 +221,7 @@ export function PromptTab({ bundle, onChange }: { bundle: StoryBundle; onChange:
                     multiline
                     placeholder="使用条件・配布元URLなど"
                   />
-                  {(character.model_type === "vrm" || character.model_type === "glb") && character.model_url && (
+                  {character.model_type === "vrm" && character.model_url && (
                     <VrmCharacterPreview character={character} />
                   )}
                 </div>

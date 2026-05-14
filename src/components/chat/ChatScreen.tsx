@@ -71,7 +71,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
   const isSceneBgGenerating = isSceneGenerating(sessionId);
   const backgroundTransition = state.settings.background_transition ?? "fade";
   const vrmCharacter = state.settings.vrm_enabled
-    ? (bundle?.characters.find((c) => c.model_type === "vrm" || c.model_type === "glb") ?? null)
+    ? (bundle?.characters.find((c) => c.model_type === "vrm") ?? null)
     : null;
 
   const updateScrollState = useCallback(() => {
@@ -101,6 +101,9 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     const container = scrollContainerRef.current;
     if (container) {
       container.scrollTo({ top: container.scrollHeight, behavior });
+      if (behavior === "auto") {
+        container.scrollTop = container.scrollHeight;
+      }
     } else {
       endRef.current?.scrollIntoView({ block: "end", behavior });
     }
@@ -110,7 +113,9 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
       isUserScrollingHistory: false,
       hasNewMessagesBelow: false
     });
-    window.requestAnimationFrame(updateScrollState);
+    if (behavior === "auto") {
+      window.requestAnimationFrame(updateScrollState);
+    }
   }, [updateScrollState]);
 
   useEffect(() => {
@@ -651,7 +656,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
         {showScrollToLatest && (
           <button
             type="button"
-            onClick={() => scrollToBottom("smooth")}
+            onClick={() => scrollToBottom("auto")}
             className="mx-auto mb-1 inline-flex min-h-10 items-center gap-1.5 rounded-full border border-brand/30 bg-canvas/95 px-4 text-sm font-semibold text-brand shadow-soft backdrop-blur"
           >
             <ArrowDown className="h-4 w-4" aria-hidden />

@@ -5,6 +5,7 @@ import { BottomNav } from "@/components/ui/BottomNav";
 import { useAppStore } from "@/lib/store/AppStore";
 import { ToggleRow, Field, SelectField } from "@/components/scenario/formControls";
 import { SupabaseAuthPanel } from "./SupabaseAuthPanel";
+import { AppVersionPanel } from "./AppVersionPanel";
 import { IMAGE_QUALITY_PRESETS, MODEL_PRESETS, type ModelPresetKey } from "@/lib/domain/constants";
 
 export function AppSettingsScreen() {
@@ -50,6 +51,7 @@ export function AppSettingsScreen() {
 
       <section className="mx-auto grid max-w-md gap-4 px-4 py-4">
         <SupabaseAuthPanel />
+        <AppVersionPanel />
 
         {/* ─── コストダッシュボード ─── */}
         <div className={`rounded-md border p-4 ${remaining <= 300 ? "border-danger/30 bg-danger/10" : "border-white/10 bg-panel"}`}>
