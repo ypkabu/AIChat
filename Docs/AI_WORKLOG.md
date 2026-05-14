@@ -1706,5 +1706,5 @@
 ### 注意点
 
 - 開発ブラウザでは20MB VRMの読み込み完了前にスクリーンショット取得がタイムアウトした。production/iPhone実機で、VRM表示完了、位置、負荷を追加確認する必要がある。
-- Supabase CLI/MCP SQL実行環境がこのターンでは使えなかったため、`20260515120000_prefer_anthropic_conversation_models.sql` は未適用。アプリ起動時の正規化で既存stateはClaudeへ寄せるが、DB defaultも揃えるには本番DB適用が必要。
+- `20260515120000_prefer_anthropic_conversation_models.sql` は Supabase CLI で本番DBへ適用し、migration history も applied に修復した。DB default と既存 `app_settings` rows もClaude中心へ揃えた。
 - Anthropic streaming実装は公式SSE仕様の `message_start` / `content_block_delta` / `message_delta` に基づく。

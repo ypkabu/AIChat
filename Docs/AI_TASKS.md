@@ -433,4 +433,4 @@
 - [x] `npm run typecheck` / `npm run lint` / `npm run build` 成功。
 - [x] Browserスマホ幅確認: 設定画面でAnthropic選択、チャットでClaude stream/typewriter、上スクロール時の選択肢非表示、「新着あり ↓ 最新へ」復帰、raw NDJSON非表示化を確認。
 - [ ] 開発ブラウザでは20MB VRMのロード開始ログまでは確認できたが、表示完了前にスクリーンショット取得がタイムアウト。iPhone実機またはproduction環境でVRM表示完了・負荷・位置を追加確認する。
-- [ ] Supabase本番DBへ `20260515120000_prefer_anthropic_conversation_models.sql` を適用し、新規/既存remote app_settingsのDB初期値もClaude中心へ揃える。
+- [x] Supabase本番DBへ `20260515120000_prefer_anthropic_conversation_models.sql` を適用し、migration history も applied に修復。新規/既存remote app_settingsのDB初期値をClaude中心へ揃えた。
