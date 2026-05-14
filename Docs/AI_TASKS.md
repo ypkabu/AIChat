@@ -108,7 +108,9 @@
 - [x] Supabase 実プロジェクト ID が提供されたため、マイグレーション適用と advisors 確認を実施。
 - [x] Supabase Auth セッションと localStorage MVP の同期レイヤーを実装する。
 - [ ] 画像生成バックエンドの private/self-hosted 接続設定 UI を追加する。
-- [ ] 画像生成の実プロバイダー adapter を追加する。
+- [x] Runpod Serverless ComfyUI endpoint を作成し、Vercel Production env に接続する。
+- [x] Runpod ComfyUI の cold start / queued job に備え、status polling を画像adapterへ追加する。
+- [ ] Runpod 実画像生成の最終E2E確認を行う（endpoint job が `IN_QUEUE` のまま進まない場合はRunpod credit/worker起動状態を確認）。
 - [x] 会話要約の自動生成タイミングを調整する。
 - [ ] ロアブック検索をキーワード一致から embedding/全文検索へ拡張する。
 - [ ] Supabase Auth の leaked password protection を Dashboard で有効化する。

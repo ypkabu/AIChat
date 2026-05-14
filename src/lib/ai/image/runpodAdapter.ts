@@ -87,7 +87,7 @@ export class RunpodImageBackend implements ImageBackend {
         "Authorization": `Bearer ${this.apiKey}`
       },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(120_000) // 2分タイムアウト
+      signal: AbortSignal.timeout(120_000) // Cold starts may return IN_QUEUE before completion.
     });
 
     if (!response.ok) {
@@ -95,17 +95,11 @@ export class RunpodImageBackend implements ImageBackend {
       throw new Error(`Runpod API error ${response.status}: ${detail}`);
     }
 
-    const data = (await response.json()) as {
-      status: string;
-      output?: {
-        images?: string[];
-        image?: string;
-        image_url?: string;
-        message?: string;
-        status?: string;
-      };
-      error?: string;
-    };
+    const data = await waitForRunpodCompletion(
+      this.endpointUrl,
+      this.apiKey,
+      (await response.json()) as RunpodJobResponse
+    );
 
     if (data.status !== "COMPLETED" || data.error) {
       throw new Error(`Runpod job failed: ${data.error ?? data.status}`);
@@ -222,6 +216,57 @@ function buildRunpodComfyWorkflow(params: {
       _meta: { title: "Save Image" }
     }
   };
+}
+
+type RunpodJobResponse = {
+  id?: string;
+  status: string;
+  output?: {
+    images?: string[];
+    image?: string;
+    image_url?: string;
+    message?: string;
+    status?: string;
+  };
+  error?: string;
+};
+
+async function waitForRunpodCompletion(
+  endpointUrl: string,
+  apiKey: string,
+  initial: RunpodJobResponse
+): Promise<RunpodJobResponse> {
+  let current = initial;
+  const deadline = Date.now() + 240_000;
+
+  while (["IN_QUEUE", "IN_PROGRESS"].includes(current.status) && current.id && Date.now() < deadline) {
+    await sleep(3_000);
+    const response = await fetch(`${getRunpodEndpointBase(endpointUrl)}/status/${current.id}`, {
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      signal: AbortSignal.timeout(30_000)
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => String(response.status));
+      throw new Error(`Runpod status API error ${response.status}: ${detail}`);
+    }
+    current = (await response.json()) as RunpodJobResponse;
+  }
+
+  if (["IN_QUEUE", "IN_PROGRESS"].includes(current.status)) {
+    throw new Error("Runpod job is still queued. Please try again after the endpoint finishes cold starting.");
+  }
+  return current;
+}
+
+function getRunpodEndpointBase(endpointUrl: string) {
+  return endpointUrl.replace(/\/(?:runsync|run)$/, "");
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function extractRunpodImageUrl(output?: {

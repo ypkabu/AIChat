@@ -3,6 +3,8 @@ import { z } from "zod";
 import { nsfwAllowed } from "@/lib/contentSafety";
 import { getImageBackend } from "@/lib/ai/imageBackends";
 
+export const maxDuration = 300;
+
 const requestSchema = z.object({
   prompt: z.string().min(1),
   sessionId: z.string(),

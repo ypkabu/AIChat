@@ -1570,3 +1570,36 @@
 ### 注意点
 
 - 実画像生成 backend、実VRMモデル、Vercel本番env比較は外部設定・実アセットが必要なため、今回のコード修正範囲では未完了。
+
+## 2026-05-14 (Runpod endpoint作成 / 本番画像生成接続)
+
+### 実施内容
+
+- Runpod REST APIで `runpod/worker-comfyui:5.8.5-flux1-dev` のServerless templateを作成した。
+- Runpod Serverless endpoint `AIChat ComfyUI Flux Endpoint` を作成した。endpoint idはVercel envへ設定済み。`workersMin=0` / `workersMax=1` のため、待機中の常時GPU課金は発生しない設定。
+- Vercel Production env に `STANDARD_IMAGE_BACKEND_URL` を追加し、production redeploy を実行した。
+- Runpod smoke testで `/runsync` が初回cold start時に `IN_QUEUE` を返すことを確認した。
+- `RunpodImageBackend` を `IN_QUEUE` / `IN_PROGRESS` 時に `/status/{jobId}` をpollingして完了を待つ実装へ修正した。
+- 画像生成API routeに `maxDuration = 300` を追加し、cold start / queue待ちに耐えやすくした。
+
+### 触ったファイル
+
+- `src/lib/ai/image/runpodAdapter.ts`
+- `src/app/api/images/generate/route.ts`
+- `Docs/AI_TASKS.md`
+- `Docs/AI_WORKLOG.md`
+
+### 確認
+
+- Runpod template作成 → HTTP 201。
+- Runpod endpoint作成 → HTTP 201。endpoint id `qifbcbb8ax27pc`。
+- `npx vercel env add STANDARD_IMAGE_BACKEND_URL production` → 成功。
+- `npx vercel deploy --prod` → 成功。`https://aichat-roleplay.vercel.app` にalias。
+- `npm run typecheck` → 成功。
+- `npm run lint` → 成功。
+- `npm run build` → 成功。
+
+### 注意点
+
+- Runpod smoke jobは作成できたが、確認時点では `IN_QUEUE` のまま。残高/credits、GPU worker起動、または初回pull待ちが原因の可能性がある。
+- APIキーなどのsecret値は出力していない。
