@@ -417,5 +417,5 @@
 - [x] デフォルト画像設定と本番 `app_settings` を `standard_image_provider=runpod` / `standard_image_model=black-forest-labs-flux-1-dev` へ更新。
 - [x] Supabase migration `20260514113000` / `20260514114000` / `20260514115000` を本番DBへ適用し、migration history を applied に修復。
 - [x] ローカルBrowser確認: 初期サンプル詳細、トーク開始、選択肢送信、実OpenAI stream/typewriter、生成中スキップ、補助アクション非表示、Continue Button継続を確認。
-- [ ] 本番デプロイ後、production `/api/images/generate` がRunpod公式Fluxの画像URLを返すことを再確認する。
+- [x] 本番デプロイ後、production `/api/images/generate` がRunpod公式Fluxの `https://image.runpod.ai/...png` URLを返すことを確認。
 - [ ] iPhone実機でPWA再追加後、VRM表示の見た目・負荷・入力欄のキーボード追従を確認する。

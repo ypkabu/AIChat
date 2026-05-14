@@ -1652,9 +1652,12 @@
 - Browser確認: 生成中はStory Choices / Continue / 画像生成メニューが消え、入力欄はdisableされたまま保持される。
 - Browser確認: 旧保存データ由来のraw JSONは残るが、新規生成分ではraw JSONが追加されず、choices/directorが通常UIへ分離されることを確認。
 - Browser確認: 設定画面で3D表示ON、`/models/AvatarSample_M.vrm` がキャラクター設定に入っていることを確認。
+- Git push後、Vercel Git連携production deployがReadyになり、`https://aichat-roleplay.vercel.app/api/debug/version` が commit `854881c02037ff16621b570408baf8920fa56c26` を返すことを確認。
+- 本番 `POST /api/images/generate` smoke testで、provider `runpod` / model `black-forest-labs-flux-1-dev` / `https://image.runpod.ai/...png` の画像URLが返ることを確認。
+- 本番 `/models/AvatarSample_M.vrm` → HTTP 200 / `application/octet-stream`。
 
 ### 注意点
 
 - 既存ブラウザlocalStorageに旧バグ由来のraw JSONメッセージが残っている場合、保存済み本文そのものは削除しない。新規生成では漏れない。
 - VRMは静的配信と設定URLを確認済み。見た目/負荷は最終的にiPhone実機で確認する。
-- Runpod公式FluxはAPI直叩きのsmokeでは成功済み。production deploy後にアプリの `/api/images/generate` 経由で再確認する。
+- Runpod公式Fluxはproduction `/api/images/generate` 経由で成功確認済み。
