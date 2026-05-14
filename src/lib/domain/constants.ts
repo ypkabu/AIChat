@@ -140,8 +140,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   preference_strength: "normal" as const,
   // Experience mode + VRM
   experience_mode: "story" as const,
-  vrm_enabled: false,
-  vrm_quality: "high" as const,
+  vrm_enabled: true,
+  vrm_quality: "low" as const,
   vrm_fps_limit: 30,
   vrm_shadow_enabled: false,
   vrm_physics_enabled: true

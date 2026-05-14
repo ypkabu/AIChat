@@ -18,9 +18,10 @@ export function getImageBackend(provider: string, model?: string): ImageBackend 
   const isNsfwProvider = providerId.includes("nsfw");
 
   if (providerId === "runpod" || providerId.startsWith("runpod:")) {
-    const endpointUrl = isNsfwProvider
+    const configuredEndpoint = isNsfwProvider
       ? (process.env.NSFW_IMAGE_BACKEND_URL ?? process.env.STANDARD_IMAGE_BACKEND_URL ?? "")
       : (process.env.STANDARD_IMAGE_BACKEND_URL ?? process.env.NSFW_IMAGE_BACKEND_URL ?? "");
+    const endpointUrl = normalizeRunpodEndpoint(configuredEndpoint);
     const apiKey = process.env.RUNPOD_API_KEY ?? "";
     if (!endpointUrl || !apiKey) {
       console.warn("[ImageBackend] Runpod selected but STANDARD_IMAGE_BACKEND_URL or RUNPOD_API_KEY is not set — falling back to mock.");
@@ -47,6 +48,13 @@ export function getImageBackend(provider: string, model?: string): ImageBackend 
   // 未知のプロバイダーは Mock にフォールバック
   console.warn(`[ImageBackend] Unknown provider "${provider}" — falling back to mock.`);
   return new MockImageBackend(modelId, isNsfwProvider);
+}
+
+function normalizeRunpodEndpoint(value: string) {
+  const trimmed = value.trim().replace(/\/$/, "");
+  if (!trimmed) return "";
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
+  return `https://api.runpod.ai/v2/${trimmed}/runsync`;
 }
 
 class MockImageBackend implements ImageBackend {

@@ -1461,6 +1461,44 @@
 - `db push --dry-run` は remote-only migration `20260513210602` / `20260514050244` が存在するため停止する。今回は対象2本だけを直接SQL適用し、history repair で整合を取った。
 - APIキーやDBパスワードなどのsecret値は出力していない。
 
+## 2026-05-14 (Vercel再デプロイ / VRM配置 / Runpod準備)
+
+### 実施内容
+
+- `C:\AIChat\AvatarSample_M.vrm` を `public/models/AvatarSample_M.vrm` にコピーし、Next.js/Vercelで静的配信できるようにした。
+- サンプルシナリオの水瀬ナギに `model_type: "vrm"` と `model_url: "/models/AvatarSample_M.vrm"` を設定した。
+- 新規AppStateではVRM表示をON、VRM品質をlowに変更した。既存localStorage/Supabase設定がある端末では、設定画面で3D表示をONにする必要がある。
+- Runpod画像アダプタを調整した。`STANDARD_IMAGE_BACKEND_URL` にendpoint IDだけを指定してもRunpod `runsync` URLへ変換し、Runpod ComfyUIの `output.message` / `output.image_url` / `output.images[0]` / `output.image` を画像URLとして扱えるようにした。
+- Vercel production deploy を実行し、`https://aichat-roleplay.vercel.app` にaliasされることを確認した。
+
+### 触ったファイル
+
+- `public/models/AvatarSample_M.vrm`
+- `src/lib/domain/sampleData.ts`
+- `src/lib/domain/constants.ts`
+- `src/lib/ai/imageBackends.ts`
+- `src/lib/ai/image/runpodAdapter.ts`
+- `Docs/AI_TASKS.md`
+- `Docs/AI_WORKLOG.md`
+
+### 確認
+
+- `npm run typecheck` → 成功。
+- `npm run lint` → 成功。
+- `npm run build` → 成功。
+- `npx vercel deploy --prod -y` → 成功。deployment `dpl_xfcdZZKtC6Kn5YPHfrd19XhT9Tun`。
+- `https://aichat-roleplay.vercel.app/api/debug/version` → HTTP 200。`environment: production`、Supabase ref tail `nxoatl`。
+- `https://aichat-roleplay.vercel.app/models/AvatarSample_M.vrm` → HTTP 200。
+- Browser確認: production `/settings` で App Version / Supabase保存 / PWA Cache Clear が表示され、console error 0。
+- Browser確認: production `/settings` の「匿名でクラウド保存」を押下したが、匿名ログインは有効化されておらず、アプリ上では「匿名ログインが無効なら、メールリンクでログインしてください。」表示になった。
+
+### 注意点
+
+- Runpod Console は未ログイン状態だったため、APIキー発行、クレジット投入、Serverless endpoint作成は未実施。これは外部アカウント・課金操作を含むため、ユーザーのログインと確認が必要。
+- 現在のVercel envには `RUNPOD_API_KEY` / `STANDARD_IMAGE_PROVIDER` / `STANDARD_IMAGE_BACKEND_URL` は未設定。設定されるまでは画像生成はmock fallbackになる。
+- Supabase Dashboard もブラウザでは未ログイン状態。DB migrationはCLIで適用済みだが、Auth provider設定のDashboard確認/変更はユーザーログイン後に行う。
+- Supabase Auth は匿名ログインが本番で無効。メールリンクログインを使うか、Dashboardログイン後に Anonymous sign-ins を有効化する必要がある。
+
 ## 2026-05-14 (総合レビュー指摘の追加修正)
 
 ### 実装内容

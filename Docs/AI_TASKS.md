@@ -377,6 +377,21 @@
 - [x] Supabase lorebook migration を冪等化し、将来の適用/再適用に強くした。
 - [x] 本番Supabaseの `scenarios.cover_image_url` は REST で存在確認済み。
 - [x] 本番Supabaseの `lorebooks` / `plot_lorebook_links` / `lorebook_entries.lorebook_id` を `supabase db query --linked` で適用し、`supabase migration repair --status applied` で `20260512210000` / `20260512220000` を applied に整えた。REST で各対象が HTTP 200 になることを確認済み。
+
+## 本番デプロイ / VRM / Runpod準備 (2026-05-14)
+
+- [x] `AvatarSample_M.vrm` を `public/models/AvatarSample_M.vrm` に配置し、本番URLから `/models/AvatarSample_M.vrm` として配信できるようにした。
+- [x] サンプルキャラクターに `model_type: "vrm"` / `model_url: "/models/AvatarSample_M.vrm"` を設定した。
+- [x] 新規状態のVRM表示をON、品質をlowにし、スマホ初回確認で重くなりすぎない初期値にした。
+- [x] Runpod画像アダプタを、本番Runpod ComfyUIの返却形式（base64 / data URL / image_url / output.message）に対応させた。
+- [x] `STANDARD_IMAGE_BACKEND_URL` にRunpod endpoint IDだけを入れても `https://api.runpod.ai/v2/{endpoint}/runsync` に解決できるようにした。
+- [x] `npm run typecheck` / `npm run lint` / `npm run build` 成功。
+- [x] Vercel production deploy 成功。`https://aichat-roleplay.vercel.app/api/debug/version` が HTTP 200 を返すことを確認。
+- [x] 本番URLから `/models/AvatarSample_M.vrm` が HTTP 200 で取得できることを確認。
+- [x] 本番 `/settings` で Supabase匿名ログインを試し、Anonymous sign-ins が現在無効であることを確認。
+- [ ] Supabase Dashboard にログインし、必要なら Anonymous sign-ins を有効化する。メールリンク運用だけでよい場合はこのままでも可。
+- [ ] Runpod側は未ログインのため、APIキー発行・クレジット投入・Serverless ComfyUI endpoint作成は人間のログイン/課金操作後に実施する。
+- [ ] Vercel production env に `RUNPOD_API_KEY` / `STANDARD_IMAGE_PROVIDER=runpod` / `STANDARD_IMAGE_BACKEND_URL` を設定する。
 - [x] ChatScreen の `↓ 最新へ` / `新着あり ↓ 最新へ` を即時スクロールに変更し、smooth scroll 中の早すぎる再判定で履歴閲覧中へ戻る問題を修正。
 - [x] 旧バグで保存済みの raw JSON / provider schema error メッセージを、チャット表示時に短い説明文へ畳むよう修正。データ自体は削除しない。
 - [x] `npm test` を `npm run typecheck` に接続し、最低限のテストコマンドを実行可能にした。

@@ -99,7 +99,13 @@ export class RunpodImageBackend implements ImageBackend {
 
     const data = (await response.json()) as {
       status: string;
-      output?: { images?: string[]; image?: string };
+      output?: {
+        images?: string[];
+        image?: string;
+        image_url?: string;
+        message?: string;
+        status?: string;
+      };
       error?: string;
     };
 
@@ -107,11 +113,8 @@ export class RunpodImageBackend implements ImageBackend {
       throw new Error(`Runpod job failed: ${data.error ?? data.status}`);
     }
 
-    // images[0] は base64 文字列
-    const base64 = data.output?.images?.[0] ?? data.output?.image;
-    if (!base64) throw new Error("Runpod: 出力画像がありませんでした。");
-
-    const imageUrl = `data:image/png;base64,${base64}`;
+    const imageUrl = extractRunpodImageUrl(data.output);
+    if (!imageUrl) throw new Error("Runpod: 出力画像がありませんでした。");
     const jobId = newId("job");
 
     return {
@@ -129,4 +132,18 @@ export class RunpodImageBackend implements ImageBackend {
       }
     };
   }
+}
+
+function extractRunpodImageUrl(output?: {
+  images?: string[];
+  image?: string;
+  image_url?: string;
+  message?: string;
+}) {
+  const raw = output?.images?.[0] ?? output?.image ?? output?.image_url ?? output?.message ?? "";
+  if (!raw) return "";
+  if (raw.startsWith("data:image/") || raw.startsWith("http://") || raw.startsWith("https://")) {
+    return raw;
+  }
+  return `data:image/png;base64,${raw}`;
 }
