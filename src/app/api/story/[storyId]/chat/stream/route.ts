@@ -115,7 +115,6 @@ export async function POST(request: Request, context: { params: Promise<{ storyI
       let sentTimelineCount = 0;
       let choicesSent = false;
       let directorSent = false;
-      let smartRepliesSent = false;
       let usage: ConversationResponse["usage"] = {
         backend,
         provider: "openai",
@@ -144,7 +143,6 @@ export async function POST(request: Request, context: { params: Promise<{ storyI
               if (emitted === "timeline_item") sentTimelineCount += 1;
               if (emitted === "choices") choicesSent = true;
               if (emitted === "director_update") directorSent = true;
-              if (emitted === "smart_replies") smartRepliesSent = true;
             } else {
               pendingLine = pendingLine ? `${pendingLine}\n${line}` : line;
             }
@@ -236,7 +234,6 @@ export async function POST(request: Request, context: { params: Promise<{ storyI
             if (emitted === "timeline_item") sentTimelineCount += 1;
             if (emitted === "choices") choicesSent = true;
             if (emitted === "director_update") directorSent = true;
-            if (emitted === "smart_replies") smartRepliesSent = true;
           } else {
             send("timeline_item", { type: "narration", characterName: null, content: trailing } satisfies TimelineItem);
             sentTimelineCount += 1;
@@ -249,7 +246,6 @@ export async function POST(request: Request, context: { params: Promise<{ storyI
           if (fallback.suggestedReplies.length) send("choices", { items: fallback.suggestedReplies });
           if (fallback.smartReplies.length) {
             send("smart_replies", { replies: fallback.smartReplies });
-            smartRepliesSent = true;
           }
           send("director_update", fallback.directorUpdate);
           choicesSent = fallback.suggestedReplies.length > 0;

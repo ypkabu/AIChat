@@ -195,7 +195,7 @@ export function buildConversationPrompt(input: PromptBuildInput): PromptBuildRes
     ),
     ...buildOptionalSection(
       "User Choice Preference Summary",
-      buildChoicePreferenceSummary(input.choicePreferences, settings)
+      buildChoicePreferenceSummary(input.choicePreferences)
     ),
     ...buildOptionalSection(
       "関連メモリ",
@@ -602,7 +602,7 @@ function selectRelevantMemories(
         score: memory.importance * 20 + (characterHit ? 30 : 0) + (keywordHit ? 20 : 0) + typeBonus + sessionBonus
       };
     })
-    .filter(({ memory, protectedMemory, score }) => protectedMemory || score >= 25);
+    .filter(({ protectedMemory, score }) => protectedMemory || score >= 25);
 
   const protectedMemories = candidates
     .filter(({ protectedMemory }) => protectedMemory)
@@ -833,8 +833,7 @@ function selectRelevantForeshadowing(
 }
 
 function buildChoicePreferenceSummary(
-  prefs: UserChoicePreferences | null | undefined,
-  settings: AppSettings
+  prefs: UserChoicePreferences | null | undefined
 ): string[] {
   if (!prefs || prefs.sampleCount < 3) return [];
   const topIntents = topNPreferenceKeys(prefs.preferredIntents, 3);

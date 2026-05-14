@@ -22,6 +22,7 @@ export function Avatar({ name, src, color, size = "md", className }: AvatarProps
       style={{ backgroundColor: src ? undefined : color ?? "#2f3542" }}
       aria-label={name ?? "avatar"}
     >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <span>{initial}</span>}
     </div>
   );

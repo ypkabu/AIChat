@@ -117,7 +117,7 @@ export function VrmViewer({
       sceneRef.current = null;
       cameraRef.current = null;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [quality, shadowEnabled]);
 
   // Add/remove VRM from scene when it changes

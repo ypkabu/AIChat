@@ -55,32 +55,38 @@ export function SceneBackground({
     <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden>
       {/* Current/base image */}
       {currentUrl ? (
-        <img
-          key={`base-${currentUrl}`}
-          src={currentUrl}
-          alt=""
-          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
-            crossfading ? "opacity-0" : "opacity-100"
-          }`}
-          loading="eager"
-          decoding="async"
-        />
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            key={`base-${currentUrl}`}
+            src={currentUrl}
+            alt=""
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
+              crossfading ? "opacity-0" : "opacity-100"
+            }`}
+            loading="eager"
+            decoding="async"
+          />
+        </>
       ) : (
         <div className="absolute inset-0 bg-canvas" />
       )}
 
       {/* Incoming image (crossfade target) */}
       {incomingUrl && (
-        <img
-          key={`incoming-${incomingUrl}`}
-          src={incomingUrl}
-          alt=""
-          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
-            crossfading ? "opacity-100" : "opacity-0"
-          }`}
-          loading="eager"
-          decoding="async"
-        />
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            key={`incoming-${incomingUrl}`}
+            src={incomingUrl}
+            alt=""
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-700 ${
+              crossfading ? "opacity-100" : "opacity-0"
+            }`}
+            loading="eager"
+            decoding="async"
+          />
+        </>
       )}
 
       {/* Dark overlay for text readability */}

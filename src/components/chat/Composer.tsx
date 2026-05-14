@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, ImagePlus, Send, Sparkles, X } from "lucide-react";
+import { ImagePlus, Send, Sparkles, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export function Composer({

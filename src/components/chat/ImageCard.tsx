@@ -12,6 +12,7 @@ export function ImageCard({ image }: { image?: GeneratedImage }) {
   return (
     <figure className="overflow-hidden rounded-md border border-white/10 bg-panel shadow-soft">
       <div className="relative aspect-[3/4] bg-panel2">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         {image.public_url ? <img src={image.public_url} alt="" className={`h-full w-full object-cover ${blurred ? "blur-xl scale-105" : ""}`} /> : null}
         {blurred && (
           <button

@@ -17,7 +17,6 @@ import type {
   ID,
   ImageGenerationJob,
   ImageQualityPreset,
-  ImageStylePreset,
   ImageTriggerType,
   Memory,
   MemoryCandidate,
@@ -167,7 +166,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const remoteSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRemoteSnapshot = useRef("");
   const activeTurnControl = useRef<TurnControl | null>(null);
-  const resolveVisualCueRef = useRef<((sessionId: ID, cue: VisualCue, bundle: StoryBundle) => Promise<void>) | null>(null);
+  const resolveVisualCueRef = useRef<((sessionId: ID, cue: VisualCue) => Promise<void>) | null>(null);
   const sceneGeneratingIdsRef = useRef<Set<ID>>(new Set());
 
   useEffect(() => {
@@ -425,7 +424,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         });
         // Process visualCue asynchronously – never blocks conversation display
         if (result.visualCue?.shouldUpdateVisual) {
-          void resolveVisualCueRef.current?.(sessionId, result.visualCue, bundle);
+          void resolveVisualCueRef.current?.(sessionId, result.visualCue);
         }
       } catch (error) {
         console.warn("[AI Background] Jobs skipped", error);
@@ -1418,7 +1417,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
   // ── Scene Visual Resolver ─────────────────────────────────────────────────
   const resolveVisualCue = useCallback(
-    async (sessionId: ID, cue: VisualCue, bundle: StoryBundle) => {
+    async (sessionId: ID, cue: VisualCue) => {
       // Prevent duplicate concurrent generation for the same session
       if (sceneGeneratingIdsRef.current.has(sessionId)) return;
       const settings = state.settings;
@@ -1545,7 +1544,6 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       const variantId = newId("svvariant");
       const now = nowIso();
       const nsfwEnabled = state.settings.adult_confirmed && state.settings.nsfw_image_enabled && session.nsfw_image_enabled;
-      const backend = nsfwEnabled ? state.settings.nsfw_image_backend : state.settings.standard_image_backend;
 
       // Register bundle if new
       if (!resolvedBundleId) {
@@ -1707,7 +1705,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         });
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     [getBundle, state, updateSceneVisualState]
   );
 
@@ -2063,7 +2061,16 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         }));
       }
     },
-    [state.sessions, state.characters, state.settings.voice_enabled, state.settings.voice_provider, state.userId]
+    [
+      state.sessions,
+      state.characters,
+      state.settings.voice_enabled,
+      state.settings.voice_provider,
+      state.settings.voice_budget_jpy,
+      state.usageLogs,
+      state.voiceJobs,
+      state.userId
+    ]
   );
 
   const approveMemoryCandidate = useCallback((candidateId: ID) => {
@@ -3189,10 +3196,6 @@ function isGeneratedUserTimelineItem(item: TimelineItem, userProfile?: { display
   if (!name) return false;
   const userNames = new Set(["{{user}}", "{user}", "user", "ユーザー", "あなた", userProfile?.display_name ?? ""].filter(Boolean));
   return userNames.has(name);
-}
-
-function qualityLogFromConversation(sessionId: ID, response: ConversationResponse, messageId: ID | null): NarrativeQualityLog {
-  return qualityLogFromQualityCheck(sessionId, response.qualityCheck, messageId);
 }
 
 function qualityLogFromQualityCheck(sessionId: ID, quality: QualityCheck, messageId: ID | null): NarrativeQualityLog {

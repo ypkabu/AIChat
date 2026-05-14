@@ -585,7 +585,8 @@ function throwFirstError(results: Array<{ error: unknown }>) {
 
 function fromDbSettings(row: Record<string, unknown> | null): AppSettings {
   if (!row) return DEFAULT_SETTINGS;
-  const { user_id: _userId, ...settings } = row;
+  const settings = { ...row };
+  delete settings.user_id;
   return { ...DEFAULT_SETTINGS, ...settings } as AppSettings;
 }
 
@@ -687,7 +688,8 @@ function toDbImage(image: GeneratedImage) {
 }
 
 function fromDbGalleryItem(row: Record<string, unknown>): GeneratedImage {
-  const { image_id: _imageId, ...image } = row;
+  const image = { ...row };
+  delete image.image_id;
   return image as unknown as GeneratedImage;
 }
 

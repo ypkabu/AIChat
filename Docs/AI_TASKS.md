@@ -377,3 +377,7 @@
 - [x] Supabase lorebook migration を冪等化し、将来の適用/再適用に強くした。
 - [x] 本番Supabaseの `scenarios.cover_image_url` は REST で存在確認済み。
 - [x] 本番Supabaseの `lorebooks` / `plot_lorebook_links` / `lorebook_entries.lorebook_id` を `supabase db query --linked` で適用し、`supabase migration repair --status applied` で `20260512210000` / `20260512220000` を applied に整えた。REST で各対象が HTTP 200 になることを確認済み。
+- [x] ChatScreen の `↓ 最新へ` / `新着あり ↓ 最新へ` を即時スクロールに変更し、smooth scroll 中の早すぎる再判定で履歴閲覧中へ戻る問題を修正。
+- [x] 旧バグで保存済みの raw JSON / provider schema error メッセージを、チャット表示時に短い説明文へ畳むよう修正。データ自体は削除しない。
+- [x] `npm test` を `npm run typecheck` に接続し、最低限のテストコマンドを実行可能にした。
+- [x] 既存 lint warning 19件を解消し、`npm run lint` が warning 0 / error 0 で通る状態にした。

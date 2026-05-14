@@ -52,6 +52,8 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
   const bundle = session ? getBundle(session.scenario_id) : null;
   const messages = state.messages.filter((message) => message.session_id === sessionId);
   const latestMessage = messages.at(-1);
+  const latestMessageId = latestMessage?.id;
+  const latestMessageContentLength = latestMessage?.content.length ?? 0;
   const messageCountRef = useRef(messages.length);
   const images = state.images.filter((image) => image.session_id === sessionId);
   const environmentState = state.sessionEnvironmentStates.find((item) => item.session_id === sessionId) ?? null;
@@ -122,6 +124,8 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     messageCountRef.current = messages.length;
     const frame = window.requestAnimationFrame(() => scrollToBottom("auto"));
     return () => window.cancelAnimationFrame(frame);
+    // This effect is session-scoped; message length changes are handled by the next effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollToBottom, sessionId]);
 
   useEffect(() => {
@@ -136,11 +140,11 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
   }, [messages.length, scrollToBottom]);
 
   useEffect(() => {
-    if (!latestMessage) return;
+    if (!latestMessageId) return;
     if (isAtBottomRef.current) {
       window.requestAnimationFrame(() => scrollToBottom("auto"));
     }
-  }, [latestMessage?.id, latestMessage?.content.length, scrollToBottom]);
+  }, [latestMessageId, latestMessageContentLength, scrollToBottom]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
