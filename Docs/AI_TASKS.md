@@ -392,7 +392,11 @@
 - [x] 本番 `/settings` で Supabase匿名ログインを試し、Anonymous sign-ins が現在無効であることを確認。
 - [ ] Supabase Dashboard にログインし、必要なら Anonymous sign-ins を有効化する。メールリンク運用だけでよい場合はこのままでも可。
 - [ ] Runpod側は未ログインのため、APIキー発行・クレジット投入・Serverless ComfyUI endpoint作成は人間のログイン/課金操作後に実施する。
-- [ ] Vercel production env に `RUNPOD_API_KEY` / `STANDARD_IMAGE_PROVIDER=runpod` / `STANDARD_IMAGE_BACKEND_URL` を設定する。
+- [x] Runpod API key を作成し、Vercel production env に `RUNPOD_API_KEY` を設定した。
+- [x] Vercel production env に `STANDARD_IMAGE_PROVIDER=runpod` / `STANDARD_IMAGE_MODEL=runpod-comfyui-flux1-dev-fp8` を設定した。
+- [x] Runpod Hub ComfyUI worker が要求する `input.workflow` 形式に `runpodAdapter.ts` を変更した。
+- [ ] Runpodに支払い方法/クレジットを追加し、Serverless ComfyUI endpointを作成する。
+- [ ] Vercel production env に `STANDARD_IMAGE_BACKEND_URL=<Runpod endpoint ID>` を設定する。
 - [x] ChatScreen の `↓ 最新へ` / `新着あり ↓ 最新へ` を即時スクロールに変更し、smooth scroll 中の早すぎる再判定で履歴閲覧中へ戻る問題を修正。
 - [x] 旧バグで保存済みの raw JSON / provider schema error メッセージを、チャット表示時に短い説明文へ畳むよう修正。データ自体は削除しない。
 - [x] `npm test` を `npm run typecheck` に接続し、最低限のテストコマンドを実行可能にした。

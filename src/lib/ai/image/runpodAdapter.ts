@@ -9,13 +9,13 @@
  *        RUNPOD_API_KEY=<your_runpod_api_key>
  *   3. 設定画面の「Standard Image Provider」を "runpod" にする
  *
- * Runpod の runsync API は以下の形式でリクエストを送る:
+ * Runpod Hub の ComfyUI worker は以下の形式でリクエストを送る:
  *   POST https://api.runpod.ai/v2/<endpoint_id>/runsync
  *   Authorization: Bearer <api_key>
- *   { "input": { "prompt": "...", "negative_prompt": "...", ... } }
+ *   { "input": { "workflow": { ... ComfyUI API workflow ... } } }
  *
  * レスポンス:
- *   { "id": "...", "status": "COMPLETED", "output": { "images": ["<base64>"] } }
+ *   { "id": "...", "status": "COMPLETED", "output": { "message": "data:image/png;base64,..." } }
  */
 
 import { assessContentSafety } from "@/lib/contentSafety";
@@ -69,16 +69,14 @@ export class RunpodImageBackend implements ImageBackend {
 
     const payload = {
       input: {
-        prompt: request.prompt,
-        negative_prompt: negativePrompt,
-        width: size.width,
-        height: size.height,
-        num_inference_steps: steps,
-        guidance_scale: 7,
-        num_images: 1,
-        // モデル固有設定はここに追加可能
-        // scheduler: "DPM++ 2M Karras",
-        // seed: -1,
+        workflow: buildRunpodComfyWorkflow({
+          prompt: request.prompt,
+          negativePrompt,
+          width: size.width,
+          height: size.height,
+          steps,
+          seed: Math.floor(Math.random() * 2 ** 48)
+        })
       }
     };
 
@@ -132,6 +130,98 @@ export class RunpodImageBackend implements ImageBackend {
       }
     };
   }
+}
+
+function buildRunpodComfyWorkflow(params: {
+  prompt: string;
+  negativePrompt: string;
+  width: number;
+  height: number;
+  steps: number;
+  seed: number;
+}): Record<string, unknown> {
+  return {
+    "6": {
+      inputs: {
+        text: params.prompt,
+        clip: ["30", 1]
+      },
+      class_type: "CLIPTextEncode",
+      _meta: { title: "CLIP Text Encode (Positive Prompt)" }
+    },
+    "8": {
+      inputs: {
+        samples: ["31", 0],
+        vae: ["30", 2]
+      },
+      class_type: "VAEDecode",
+      _meta: { title: "VAE Decode" }
+    },
+    "9": {
+      inputs: {
+        filename_prefix: "aichat_",
+        images: ["8", 0]
+      },
+      class_type: "SaveImage",
+      _meta: { title: "Save Image" }
+    },
+    "27": {
+      inputs: {
+        width: params.width,
+        height: params.height,
+        batch_size: 1
+      },
+      class_type: "EmptySD3LatentImage",
+      _meta: { title: "EmptySD3LatentImage" }
+    },
+    "30": {
+      inputs: {
+        ckpt_name: "flux1-dev-fp8.safetensors"
+      },
+      class_type: "CheckpointLoaderSimple",
+      _meta: { title: "Load Checkpoint" }
+    },
+    "31": {
+      inputs: {
+        seed: params.seed,
+        steps: Math.max(6, Math.min(params.steps, 16)),
+        cfg: 1,
+        sampler_name: "euler",
+        scheduler: "simple",
+        denoise: 1,
+        model: ["30", 0],
+        positive: ["35", 0],
+        negative: ["33", 0],
+        latent_image: ["27", 0]
+      },
+      class_type: "KSampler",
+      _meta: { title: "KSampler" }
+    },
+    "33": {
+      inputs: {
+        text: params.negativePrompt,
+        clip: ["30", 1]
+      },
+      class_type: "CLIPTextEncode",
+      _meta: { title: "CLIP Text Encode (Negative Prompt)" }
+    },
+    "35": {
+      inputs: {
+        guidance: 3.5,
+        conditioning: ["6", 0]
+      },
+      class_type: "FluxGuidance",
+      _meta: { title: "FluxGuidance" }
+    },
+    "40": {
+      inputs: {
+        filename_prefix: "aichat_",
+        images: ["8", 0]
+      },
+      class_type: "SaveImage",
+      _meta: { title: "Save Image" }
+    }
+  };
 }
 
 function extractRunpodImageUrl(output?: {

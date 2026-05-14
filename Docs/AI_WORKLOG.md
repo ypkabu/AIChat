@@ -1501,6 +1501,29 @@
 - Supabase Dashboard もブラウザでは未ログイン状態。DB migrationはCLIで適用済みだが、Auth provider設定のDashboard確認/変更はユーザーログイン後に行う。
 - Supabase Auth は匿名ログインが本番で無効。メールリンクログインを使うか、Dashboardログイン後に Anonymous sign-ins を有効化する必要がある。
 
+## 2026-05-14 (Runpodログイン後の本番画像生成準備)
+
+### 実施内容
+
+- Runpod Console のログインを確認した。アカウント残高は `$0.00` で、支払い方法追加・クレジット追加が未完了。
+- Runpod API key を作成した。キー値は出力せず、一時ファイル経由でVercel envへ渡し、一時ファイルは即削除した。
+- Vercel production env に `RUNPOD_API_KEY`、`STANDARD_IMAGE_PROVIDER=runpod`、`STANDARD_IMAGE_MODEL=runpod-comfyui-flux1-dev-fp8` を追加した。
+- Runpod Hub の ComfyUI worker は `input.workflow` を要求することを確認したため、`runpodAdapter.ts` を ComfyUI workflow 送信方式へ変更した。
+- Runpod Hub ComfyUI workerのFLUX.1-dev-fp8向けworkflowに合わせ、`flux1-dev-fp8.safetensors` / `EmptySD3LatentImage` / `FluxGuidance` を使う構成にした。
+
+### 確認
+
+- `npm run typecheck` → 成功。
+- `npm run lint` → 成功。
+- `npm run build` → 成功。
+- `npx vercel env ls` → `RUNPOD_API_KEY` / `STANDARD_IMAGE_PROVIDER` / `STANDARD_IMAGE_MODEL` が Production に存在。
+
+### 未完了
+
+- Runpod Serverless ComfyUI endpoint作成は、支払い方法/クレジット未設定のため未完了。Runpod画面は残高0の状態でendpoint作成画面が空表示になり進行不能だった。
+- `STANDARD_IMAGE_BACKEND_URL` は未設定。Runpod endpoint作成後、Endpoint IDをこのenvに入れる必要がある。
+- Supabase Dashboardはログイン後URLへ移動できたが、ブラウザ自動操作では画面DOMが取得できずAuth provider設定の変更未完了。アプリ本番の匿名ログインテストでは引き続き無効。
+
 ## 2026-05-14 (総合レビュー指摘の追加修正)
 
 ### 実装内容
