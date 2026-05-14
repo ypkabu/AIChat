@@ -388,6 +388,7 @@
 - [x] `npm run typecheck` / `npm run lint` / `npm run build` 成功。
 - [x] Vercel production deploy 成功。`https://aichat-roleplay.vercel.app/api/debug/version` が HTTP 200 を返すことを確認。
 - [x] 本番URLから `/models/AvatarSample_M.vrm` が HTTP 200 で取得できることを確認。
+- [x] GitHub `master` へ commit/push し、Vercel Git連携の自動production deployが `source: git` で走ることを確認。`/api/debug/version` は commit `681a0c71eb1547e034615b72f82ed3e637ee45a4` を返す。
 - [x] 本番 `/settings` で Supabase匿名ログインを試し、Anonymous sign-ins が現在無効であることを確認。
 - [ ] Supabase Dashboard にログインし、必要なら Anonymous sign-ins を有効化する。メールリンク運用だけでよい場合はこのままでも可。
 - [ ] Runpod側は未ログインのため、APIキー発行・クレジット投入・Serverless ComfyUI endpoint作成は人間のログイン/課金操作後に実施する。

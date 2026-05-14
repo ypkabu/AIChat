@@ -1489,6 +1489,8 @@
 - `npx vercel deploy --prod -y` → 成功。deployment `dpl_xfcdZZKtC6Kn5YPHfrd19XhT9Tun`。
 - `https://aichat-roleplay.vercel.app/api/debug/version` → HTTP 200。`environment: production`、Supabase ref tail `nxoatl`。
 - `https://aichat-roleplay.vercel.app/models/AvatarSample_M.vrm` → HTTP 200。
+- `git push origin master` 後、Vercel Git連携による自動production deploy `dpl_5ZdARLaQxWGa9YuhwBWtqNP8dMSb` が `source: git` で READY になった。
+- 自動deploy後の `https://aichat-roleplay.vercel.app/api/debug/version` → commit `681a0c71eb1547e034615b72f82ed3e637ee45a4`。
 - Browser確認: production `/settings` で App Version / Supabase保存 / PWA Cache Clear が表示され、console error 0。
 - Browser確認: production `/settings` の「匿名でクラウド保存」を押下したが、匿名ログインは有効化されておらず、アプリ上では「匿名ログインが無効なら、メールリンクでログインしてください。」表示になった。
 
