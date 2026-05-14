@@ -41,6 +41,8 @@ import type {
   TimelineItem,
   UsageLog,
   UserChoicePreferences,
+  VrmExpression,
+  VrmMotion,
   VariantType,
   VisualCue,
   VoiceGenerationJob
@@ -185,6 +187,14 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     if (!hydrated) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [hydrated, state]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    setState((current) => {
+      const nextSettings = preferAnthropicForOldBalancedSettings(current.settings);
+      return nextSettings === current.settings ? current : { ...current, settings: nextSettings };
+    });
+  }, [hydrated, state.settings]);
 
   useEffect(() => {
     if (!hydrated || !isSupabaseConfigured) {
@@ -2318,15 +2328,16 @@ function normalizeState(state: AppState): AppState {
     typewriter_enabled: state.settings?.typewriter_enabled ?? state.settings?.timeline_reveal_enabled ?? DEFAULT_SETTINGS.typewriter_enabled,
     typewriter_speed: state.settings?.typewriter_speed ?? state.settings?.timeline_reveal_speed ?? DEFAULT_SETTINGS.typewriter_speed
   };
+  const normalizedSettings = preferAnthropicForOldBalancedSettings(settings);
   const characters = mergeSeededById(fresh.characters, state.characters ?? []).map((character) => {
     const seeded = fresh.characters.find((item) => item.id === character.id);
     if (!seeded) return character;
     return {
       ...character,
-      model_type: character.model_type ?? seeded.model_type ?? null,
-      model_url: character.model_url ?? seeded.model_url ?? null,
-      default_expression: character.default_expression ?? seeded.default_expression ?? null,
-      default_motion: character.default_motion ?? seeded.default_motion ?? null,
+      model_type: normalizeModelType(character.model_type) ?? seeded.model_type ?? null,
+      model_url: nullableText(character.model_url) ?? seeded.model_url ?? null,
+      default_expression: (nullableText(character.default_expression) as VrmExpression | null) ?? seeded.default_expression ?? null,
+      default_motion: (nullableText(character.default_motion) as VrmMotion | null) ?? seeded.default_motion ?? null,
       vrm_scale: character.vrm_scale ?? seeded.vrm_scale ?? null,
       vrm_position_json: character.vrm_position_json ?? seeded.vrm_position_json ?? null,
       expression_map_json: character.expression_map_json ?? seeded.expression_map_json ?? null,
@@ -2354,6 +2365,7 @@ function normalizeState(state: AppState): AppState {
       recommended_tone: scenario.recommended_tone ?? ""
     })),
     bookmarkedScenarioIds: state.bookmarkedScenarioIds ?? [],
+    settings: normalizedSettings,
     characters,
     userProfiles: mergeSeededById(fresh.userProfiles, state.userProfiles ?? []),
     lorebook: mergeSeededById(fresh.lorebook, state.lorebook ?? []),
@@ -2435,7 +2447,6 @@ function normalizeState(state: AppState): AppState {
     imageJobs: state.imageJobs ?? [],
     images: state.images ?? [],
     voiceJobs: state.voiceJobs ?? [],
-    settings,
     choiceEvents: state.choiceEvents ?? [],
     choicePreferences: state.choicePreferences ?? null,
     scenarioChoicePreferences: state.scenarioChoicePreferences ?? {},
@@ -2449,6 +2460,54 @@ function normalizeState(state: AppState): AppState {
       latency_ms: usage.latency_ms ?? (typeof usage.meta?.latency_ms === "number" ? usage.meta.latency_ms : null),
       image_count: usage.image_count ?? (usage.kind === "image" ? 1 : 0)
     }))
+  };
+}
+
+function nullableText(value: string | null | undefined) {
+  if (typeof value !== "string") return value ?? null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
+function normalizeModelType(value: string | null | undefined): "none" | "vrm" | "glb" | null {
+  const normalized = nullableText(value);
+  if (normalized === "none" || normalized === "vrm" || normalized === "glb") return normalized;
+  return null;
+}
+
+function preferAnthropicForOldBalancedSettings(settings: AppSettings): AppSettings {
+  const hasOpenAiConversationRole = [
+    settings.normal_conversation_provider,
+    settings.nsfw_conversation_provider,
+    settings.cheap_conversation_provider,
+    settings.smart_conversation_provider,
+    settings.director_provider,
+    settings.smart_reply_provider,
+    settings.summary_provider,
+    settings.image_prompt_provider
+  ].some((provider) => provider === "openai");
+  if (!hasOpenAiConversationRole) return settings;
+
+  return {
+    ...settings,
+    normal_conversation_backend: settings.normal_conversation_provider === "openai" ? "anthropic" : settings.normal_conversation_backend,
+    nsfw_conversation_backend: settings.nsfw_conversation_provider === "openai" ? "anthropic" : settings.nsfw_conversation_backend,
+    normal_conversation_provider: settings.normal_conversation_provider === "openai" ? "anthropic" : settings.normal_conversation_provider,
+    normal_conversation_model: settings.normal_conversation_provider === "openai" ? "claude-sonnet-4-5" : settings.normal_conversation_model,
+    nsfw_conversation_provider: settings.nsfw_conversation_provider === "openai" ? "anthropic" : settings.nsfw_conversation_provider,
+    nsfw_conversation_model: settings.nsfw_conversation_provider === "openai" ? "claude-sonnet-4-5" : settings.nsfw_conversation_model,
+    cheap_conversation_provider: settings.cheap_conversation_provider === "openai" ? "anthropic" : settings.cheap_conversation_provider,
+    cheap_conversation_model: settings.cheap_conversation_provider === "openai" ? "claude-sonnet-4-5" : settings.cheap_conversation_model,
+    smart_conversation_provider: settings.smart_conversation_provider === "openai" ? "anthropic" : settings.smart_conversation_provider,
+    smart_conversation_model: settings.smart_conversation_provider === "openai" ? "claude-opus-4-5" : settings.smart_conversation_model,
+    director_provider: settings.director_provider === "openai" ? "anthropic" : settings.director_provider,
+    director_model: settings.director_provider === "openai" ? "claude-sonnet-4-5" : settings.director_model,
+    smart_reply_provider: settings.smart_reply_provider === "openai" ? "anthropic" : settings.smart_reply_provider,
+    smart_reply_model: settings.smart_reply_provider === "openai" ? "claude-sonnet-4-5" : settings.smart_reply_model,
+    summary_provider: settings.summary_provider === "openai" ? "anthropic" : settings.summary_provider,
+    summary_model: settings.summary_provider === "openai" ? "claude-sonnet-4-5" : settings.summary_model,
+    image_prompt_provider: settings.image_prompt_provider === "openai" ? "anthropic" : settings.image_prompt_provider,
+    image_prompt_model: settings.image_prompt_provider === "openai" ? "claude-sonnet-4-5" : settings.image_prompt_model
   };
 }
 
@@ -3907,12 +3966,17 @@ function buildSceneBackgroundPrompt(
 ): string {
   const parts: string[] = [];
 
+  parts.push("coherent visual novel anime background, single consistent scene, no random extra characters");
+
   // POV and camera
   const povLabel = cue.pov === "first_person" ? "first-person POV" : "third-person view";
   const distanceLabel = cue.cameraDistance === "close" ? "close-up" : cue.cameraDistance === "wide" ? "wide shot" : "medium shot";
   parts.push(`${povLabel}, ${distanceLabel}`);
 
   // Location / atmosphere
+  parts.push(`scenario: ${bundle.scenario.title}`);
+  if (bundle.scenario.world_setting) parts.push(`world setting: ${shortenForPrompt(bundle.scenario.world_setting, 180)}`);
+  if (bundle.scenario.relationship_setup) parts.push(`relationship mood: ${shortenForPrompt(bundle.scenario.relationship_setup, 140)}`);
   if (cue.location) parts.push(`scene: ${cue.location}`);
   if (cue.timeOfDay) parts.push(cue.timeOfDay);
   if (cue.weather) parts.push(cue.weather);
@@ -3936,12 +4000,18 @@ function buildSceneBackgroundPrompt(
   if (bundle.style.prose_style) parts.push(`style: ${bundle.style.prose_style}`);
 
   // AI-provided prompt summary
-  if (cue.promptSummary) parts.push(cue.promptSummary);
+  if (cue.promptSummary) parts.push(`current story beat: ${shortenForPrompt(cue.promptSummary, 220)}`);
 
   // Quality markers
-  parts.push("visual novel background, detailed illustration, high quality");
+  parts.push("match the current story context, no text, no subtitles, no speech bubbles, no logos, no watermark");
+  parts.push("detailed illustration, clean composition, high quality");
 
   return parts.filter(Boolean).join(", ");
+}
+
+function shortenForPrompt(value: string | null | undefined, maxLength: number) {
+  const text = (value ?? "").trim();
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 }
 
 function trackChoiceSelection(

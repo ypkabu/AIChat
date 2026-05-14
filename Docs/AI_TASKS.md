@@ -419,3 +419,18 @@
 - [x] ローカルBrowser確認: 初期サンプル詳細、トーク開始、選択肢送信、実OpenAI stream/typewriter、生成中スキップ、補助アクション非表示、Continue Button継続を確認。
 - [x] 本番デプロイ後、production `/api/images/generate` がRunpod公式Fluxの `https://image.runpod.ai/...png` URLを返すことを確認。
 - [ ] iPhone実機でPWA再追加後、VRM表示の見た目・負荷・入力欄のキーボード追従を確認する。
+
+## Claude実ストリーミング / スマホスクロール安定化 / 画像・3D調整 (2026-05-15)
+
+- [x] `/api/story/[storyId]/chat/stream` を Anthropic Messages API SSE に対応。Claude の `content_block_delta.text_delta` を既存のNDJSON parserへ流し込み、OpenAI以外でもリアルタイム表示できるようにした。
+- [x] 既存/remote/localStorageのOpenAI会話設定を、起動時にAnthropic/Claudeへ寄せる正規化を追加。新規デフォルトとモデルプリセットもClaude中心へ変更。
+- [x] スマホで上スクロールを開始した時に選択肢が暴れる問題を、履歴スクロールロック方式で修正。明示的に最下部へ戻るまで Story Choices / Smart Reply / Continue / 画像補助アクションを隠す。
+- [x] 旧バグで保存済みの escaped/raw NDJSON メッセージを表示時にtimelineへ展開し、choices/directorだけのraw JSONは通常チャット本文に出さないようにした。
+- [x] Prompt Builderに「主人公は明示設定がない限り成人男性」「キャラの口調・一人称・呼称・サンプル台詞を維持」を追加し、性格/口調のブレを抑制。
+- [x] 手動画像生成/背景画像生成のpromptを、シナリオ、世界観、関係性、現在地、直近イベント、登場キャラ外見を含む一貫した場面promptへ強化。Runpod negative promptにも text/logo/extra people/unrelated scene を追加。
+- [x] 古いキャラデータで `model_type` / `model_url` が空文字の場合も、seed済みVRM設定を補完するよう修正。ChatScreen側にも `/models/AvatarSample_M.vrm` fallback を追加。
+- [x] VRM canvasの初回resizeを明示実行し、カメラ位置とチャット内表示枠をスマホ中央寄りに調整。
+- [x] `npm run typecheck` / `npm run lint` / `npm run build` 成功。
+- [x] Browserスマホ幅確認: 設定画面でAnthropic選択、チャットでClaude stream/typewriter、上スクロール時の選択肢非表示、「新着あり ↓ 最新へ」復帰、raw NDJSON非表示化を確認。
+- [ ] 開発ブラウザでは20MB VRMのロード開始ログまでは確認できたが、表示完了前にスクリーンショット取得がタイムアウト。iPhone実機またはproduction環境でVRM表示完了・負荷・位置を追加確認する。
+- [ ] Supabase本番DBへ `20260515120000_prefer_anthropic_conversation_models.sql` を適用し、新規/既存remote app_settingsのDB初期値もClaude中心へ揃える。

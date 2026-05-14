@@ -29,6 +29,9 @@ export function useVrmModel(modelUrl: string | null | undefined): VrmModelState 
       return;
     }
 
+    if (process.env.NODE_ENV !== "production") {
+      console.debug("[VRM] loading model", modelUrl);
+    }
     setState({ vrm: null, loading: true, error: null, loadTimeMs: null });
     let cancelled = false;
     const loadStart = performance.now();
@@ -48,6 +51,9 @@ export function useVrmModel(modelUrl: string | null | undefined): VrmModelState 
             return;
           }
           VRMUtils.rotateVRM0(vrmModel);
+          if (process.env.NODE_ENV !== "production") {
+            console.debug("[VRM] loaded model", modelUrl, Math.round(performance.now() - loadStart));
+          }
           setState({ vrm: vrmModel, loading: false, error: null, loadTimeMs: Math.round(performance.now() - loadStart) });
         } catch (e) {
           setState({ vrm: null, loading: false, error: e instanceof Error ? e.message : String(e), loadTimeMs: null });
@@ -57,6 +63,9 @@ export function useVrmModel(modelUrl: string | null | undefined): VrmModelState 
       (err) => {
         if (cancelled) return;
         const msg = err instanceof Error ? err.message : (err as { message?: string }).message ?? "ファイルの読み込みに失敗しました";
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[VRM] load failed", modelUrl, msg);
+        }
         setState({ vrm: null, loading: false, error: msg, loadTimeMs: null });
       }
     );

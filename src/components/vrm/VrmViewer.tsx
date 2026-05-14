@@ -94,20 +94,22 @@ export function VrmViewer({
     scene.add(dirLight);
 
     // Camera
-    const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 20);
-    camera.position.set(0, 1.15, 2.2);
-    camera.lookAt(0, 1.05, 0);
+    const camera = new THREE.PerspectiveCamera(24, 1, 0.1, 20);
+    camera.position.set(0, 1.2, -2.45);
+    camera.lookAt(0, 1.1, 0);
     cameraRef.current = camera;
 
     // Resize observer
-    const ro = new ResizeObserver(() => {
-      const w = canvas.clientWidth;
-      const h = canvas.clientHeight;
+    const resizeRenderer = () => {
+      const w = Math.max(1, canvas.clientWidth);
+      const h = Math.max(1, canvas.clientHeight);
       renderer.setSize(w, h, false);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
-    });
+    };
+    const ro = new ResizeObserver(resizeRenderer);
     ro.observe(canvas);
+    resizeRenderer();
 
     return () => {
       ro.disconnect();
@@ -286,7 +288,7 @@ function fitVrmToCamera(sceneObj: THREE.Object3D, character: ScenarioCharacter |
   box.getSize(size);
 
   if (size.y > 0) {
-    const targetHeight = 1.55;
+    const targetHeight = 1.68;
     const scale = (character?.vrm_scale ?? 1) * (targetHeight / size.y);
     sceneObj.scale.setScalar(scale);
     sceneObj.updateMatrixWorld(true);
@@ -296,7 +298,7 @@ function fitVrmToCamera(sceneObj: THREE.Object3D, character: ScenarioCharacter |
   const center = new THREE.Vector3();
   fittedBox.getCenter(center);
   sceneObj.position.x -= center.x;
-  sceneObj.position.y -= fittedBox.min.y - 0.02;
+  sceneObj.position.y -= fittedBox.min.y - 0.04;
   sceneObj.position.z -= center.z;
 
   const offset = character?.vrm_position_json;

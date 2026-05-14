@@ -1661,3 +1661,50 @@
 - 既存ブラウザlocalStorageに旧バグ由来のraw JSONメッセージが残っている場合、保存済み本文そのものは削除しない。新規生成では漏れない。
 - VRMは静的配信と設定URLを確認済み。見た目/負荷は最終的にiPhone実機で確認する。
 - Runpod公式Fluxはproduction `/api/images/generate` 経由で成功確認済み。
+
+## 2026-05-15 (Claude実ストリーミング / スマホスクロール安定化 / 画像・3D調整)
+
+### 実施内容
+
+- Anthropic Messages API のSSE streamに対応し、Claudeの `content_block_delta.text_delta` をOpenAI streamと同じNDJSON処理へ流すようにした。
+- 新規デフォルト、モデルプリセット、既存local/remote state正規化をClaude中心へ変更した。OpenAI設定が残っている場合はAnthropic provider / Claude modelへ寄せる。
+- スマホのチャット上スクロール時、選択肢パネルの高さ変化で最下部判定が揺れる問題を、上スクロール検知後の履歴ロック方式で修正した。
+- 旧保存データに残った escaped/raw NDJSON を表示時にtimelineへ救済し、choices/directorだけのJSONは本文に表示しないようにした。
+- Prompt Builderへ成人男性主人公の既定、キャラ口調/一人称/呼称/サンプル台詞固定ルールを追加した。
+- 画像生成promptを現在シーン・世界観・関係性・登場キャラ外見・直近イベント中心に再構成し、Runpod negative promptでランダムな人物、文字、ロゴ、無関係背景を抑制した。
+- 古いキャラデータの空文字VRM設定をseed済みVRMで補完し、ChatScreenにも `/models/AvatarSample_M.vrm` fallback を追加した。
+- VRM viewerの初回resize、カメラ位置、スマホ表示枠を調整した。
+
+### 触ったファイル
+
+- `src/app/api/story/[storyId]/chat/stream/route.ts`
+- `src/components/chat/ChatScreen.tsx`
+- `src/components/chat/MessageList.tsx`
+- `src/components/vrm/VrmViewer.tsx`
+- `src/components/vrm/useVrmModel.ts`
+- `src/lib/ai/conversation/providers/anthropicProvider.ts`
+- `src/lib/ai/image/runpodAdapter.ts`
+- `src/lib/domain/constants.ts`
+- `src/lib/promptBuilder.ts`
+- `src/lib/store/AppStore.tsx`
+- `supabase/migrations/20260515120000_prefer_anthropic_conversation_models.sql`
+- `Docs/AI_CONTEXT.md`
+- `Docs/AI_TASKS.md`
+- `Docs/AI_WORKLOG.md`
+
+### 確認
+
+- `npm run typecheck` → 成功。
+- `npm run lint` → 成功。
+- `npm run build` → 成功。
+- Browser 390x844相当: 設定画面でAnthropic/Claudeが選択されることを確認。
+- Browser 390x844相当: チャットでClaude stream routeが動き、typewriter表示、スキップ、選択肢再表示を確認。
+- Browser 390x844相当: 上スクロール直後からStory Choices / Continue / Smart Reply / 画像補助アクションが隠れ、「新着あり ↓ 最新へ」で復帰することを確認。
+- Browser 390x844相当: 旧raw NDJSONが本文に露出しないことを確認。
+- Browser 390x844相当: VRM canvas生成と `/models/AvatarSample_M.vrm` ロード開始ログを確認。
+
+### 注意点
+
+- 開発ブラウザでは20MB VRMの読み込み完了前にスクリーンショット取得がタイムアウトした。production/iPhone実機で、VRM表示完了、位置、負荷を追加確認する必要がある。
+- Supabase CLI/MCP SQL実行環境がこのターンでは使えなかったため、`20260515120000_prefer_anthropic_conversation_models.sql` は未適用。アプリ起動時の正規化で既存stateはClaudeへ寄せるが、DB defaultも揃えるには本番DB適用が必要。
+- Anthropic streaming実装は公式SSE仕様の `message_start` / `content_block_delta` / `message_delta` に基づく。

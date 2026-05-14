@@ -11,6 +11,7 @@ import type {
   ScenarioCharacter,
   SessionCharacterState,
   SessionEnvironmentState,
+  StoryBundle,
   SuggestedReply,
   VisualCue
 } from "@/lib/domain/types";
@@ -45,6 +46,8 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
   });
   const scrollContainerRef = useRef<HTMLElement | null>(null);
   const isAtBottomRef = useRef(true);
+  const historyScrollLockedRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
   const endRef = useRef<HTMLDivElement | null>(null);
   const bottomPanelRef = useRef<HTMLDivElement | null>(null);
   const [bottomPanelHeight, setBottomPanelHeight] = useState(200);
@@ -73,27 +76,45 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
   const isSceneBgGenerating = isSceneGenerating(sessionId);
   const backgroundTransition = state.settings.background_transition ?? "fade";
   const vrmCharacter = state.settings.vrm_enabled
-    ? (bundle?.characters.find((c) => c.model_type === "vrm") ?? null)
+    ? (bundle?.characters.find((c) => c.model_type === "vrm" && c.model_url) ??
+        (bundle?.characters[0] ? { ...bundle.characters[0], model_type: "vrm" as const, model_url: "/models/AvatarSample_M.vrm" } : null))
     : null;
 
   const updateScrollState = useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
     const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-    const isAtBottom = distanceFromBottom <= SCROLL_BOTTOM_THRESHOLD;
+    const withinBottomThreshold = distanceFromBottom <= SCROLL_BOTTOM_THRESHOLD;
+    const hardAtBottom = distanceFromBottom <= 12;
+    const previousScrollTop = lastScrollTopRef.current;
+    const scrollDelta = container.scrollTop - previousScrollTop;
+    const scrolledUp = scrollDelta < -2;
+    const scrolledDown = scrollDelta > 2;
+    lastScrollTopRef.current = container.scrollTop;
+
+    if (scrolledUp && distanceFromBottom > 12) {
+      historyScrollLockedRef.current = true;
+    } else if (historyScrollLockedRef.current && scrolledDown && hardAtBottom) {
+      historyScrollLockedRef.current = false;
+    } else if (!historyScrollLockedRef.current && hardAtBottom) {
+      historyScrollLockedRef.current = false;
+    }
+
+    const isAtBottom = withinBottomThreshold && !historyScrollLockedRef.current;
     isAtBottomRef.current = isAtBottom;
     setScrollState((current) => {
       const nextHasNewMessagesBelow = isAtBottom ? false : current.hasNewMessagesBelow;
+      const nextIsUserScrollingHistory = historyScrollLockedRef.current || !withinBottomThreshold;
       if (
         current.isAtBottom === isAtBottom &&
-        current.isUserScrollingHistory === !isAtBottom &&
+        current.isUserScrollingHistory === nextIsUserScrollingHistory &&
         current.hasNewMessagesBelow === nextHasNewMessagesBelow
       ) {
         return current;
       }
       return {
         isAtBottom,
-        isUserScrollingHistory: !isAtBottom,
+        isUserScrollingHistory: nextIsUserScrollingHistory,
         hasNewMessagesBelow: nextHasNewMessagesBelow
       };
     });
@@ -109,6 +130,8 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     } else {
       endRef.current?.scrollIntoView({ block: "end", behavior });
     }
+    historyScrollLockedRef.current = false;
+    if (container) lastScrollTopRef.current = container.scrollTop;
     isAtBottomRef.current = true;
     setScrollState({
       isAtBottom: true,
@@ -321,10 +344,15 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
     setBusy(true);
     setError(null);
     try {
-      const prompt =
-        kind === "character"
-          ? `${bundle.scenario.title}: ${bundle.characters.map((character) => `${character.name} ${character.appearance}`).join(" / ")}`
-          : `${bundle.scenario.title}: ${source?.content ?? latestText}`;
+      const prompt = buildContextualImagePrompt({
+        kind,
+        bundle,
+        session,
+        environmentState,
+        characterStates,
+        source,
+        latestText
+      });
       await generateImage(sessionId, prompt, kind === "event" && source ? "major_event" : "manual", false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "画像生成に失敗しました。");
@@ -348,7 +376,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
         fpsLimit={state.settings.vrm_fps_limit}
         shadowEnabled={state.settings.vrm_shadow_enabled}
         physicsEnabled={state.settings.vrm_physics_enabled}
-        className="fixed bottom-56 right-0 z-10 h-[60dvh] w-[50vw]"
+        className="fixed inset-x-0 top-[6dvh] z-10 mx-auto h-[56dvh] w-screen max-w-md overflow-visible opacity-95"
       />
     )}
     <main className="app-viewport relative flex h-dvh min-h-dvh flex-col overflow-hidden text-ink">
@@ -881,4 +909,63 @@ function shortenInfo(value: string, maxLength: number) {
   if (!value) return "";
   if (value.length <= maxLength) return value;
   return `${value.slice(0, maxLength)}...`;
+}
+
+function buildContextualImagePrompt({
+  kind,
+  bundle,
+  session,
+  environmentState,
+  characterStates,
+  source,
+  latestText
+}: {
+  kind: "scene" | "event" | "character";
+  bundle: StoryBundle;
+  session: { current_scene_key: string; scene_objective: string };
+  environmentState: SessionEnvironmentState | null;
+  characterStates: SessionCharacterState[];
+  source?: Message;
+  latestText: string;
+}) {
+  const activeCharacters = bundle.characters.slice(0, 3);
+  const characterDetails = activeCharacters.map((character) => {
+    const state = characterStates.find((item) => item.character_id === character.id);
+    return [
+      character.name,
+      character.appearance ? `appearance: ${shortenInfo(character.appearance, 180)}` : "",
+      state?.outfit ? `current outfit: ${shortenInfo(state.outfit, 80)}` : "",
+      state?.mood ? `current mood: ${shortenInfo(state.mood, 60)}` : "",
+      state?.pose ? `pose: ${shortenInfo(state.pose, 60)}` : ""
+    ].filter(Boolean).join(", ");
+  });
+  const eventText = source?.content ?? latestText;
+  const location = environmentState?.location || bundle.intro.start_location || "current scene";
+  const scene = environmentState?.scene || bundle.intro.start_situation || bundle.scenario.situation;
+  const time = environmentState?.time || "";
+  const weather = environmentState?.weather || "";
+  const currentAction = kind === "character"
+    ? "focused character portrait that matches the active character design"
+    : kind === "event"
+      ? "event CG capturing the latest story beat"
+      : "scene illustration matching the current location and mood";
+
+  return [
+    "coherent visual novel anime illustration, single consistent scene, portrait composition",
+    `image type: ${currentAction}`,
+    `scenario title: ${bundle.scenario.title}`,
+    `world setting: ${shortenInfo(bundle.scenario.world_setting || bundle.scenario.description, 220)}`,
+    `current scene key: ${session.current_scene_key}`,
+    `location: ${location}`,
+    time ? `time of day: ${time}` : "",
+    weather ? `weather: ${weather}` : "",
+    `scene context: ${shortenInfo(scene, 220)}`,
+    `relationship setup: ${shortenInfo(bundle.scenario.relationship_setup, 180)}`,
+    `latest story beat to visualize: ${shortenInfo(eventText, 260)}`,
+    characterDetails.length ? `characters that may appear, no extras: ${characterDetails.join(" | ")}` : "",
+    "the protagonist is an adult male; if visible, show him only as a modest partial figure or back-view unless the story beat requires otherwise",
+    "match the current dialogue tone and location; do not invent unrelated settings, random props, or extra people",
+    "no text, no subtitles, no speech bubbles, no logos, no watermark, no UI elements",
+    "high quality, clean composition, stable anatomy, expressive faces, soft cinematic lighting"
+  ].filter(Boolean).join(", ");
 }

@@ -63,9 +63,11 @@ export class RunpodImageBackend implements ImageBackend {
     const size = SIZE_MAP[request.size] ?? SIZE_MAP.portrait;
     const steps = STEPS_MAP[request.quality] ?? STEPS_MAP.standard;
 
+    const continuityNegative =
+      "worst quality, low quality, blurry, bad anatomy, bad hands, extra fingers, extra limbs, duplicate character, random extra people, unrelated background, inconsistent scene, text, subtitles, speech bubble, logo, watermark, UI";
     const negativePrompt = isNsfw
-      ? "worst quality, low quality, blurry, bad anatomy"
-      : "nsfw, nude, explicit, worst quality, low quality, blurry, bad anatomy";
+      ? continuityNegative
+      : `nsfw, nude, explicit, ${continuityNegative}`;
 
     const publicFluxEndpoint = isRunpodPublicFluxEndpoint(this.endpointUrl, this.modelName);
     const seed = Math.floor(Math.random() * 2 ** 48);

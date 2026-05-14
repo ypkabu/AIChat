@@ -17,7 +17,7 @@ export class AnthropicConversationProvider implements ConversationProvider {
 
   async generateTurn(request: ConversationRequest): Promise<ConversationResponse> {
     const apiKey = process.env.ANTHROPIC_API_KEY;
-    const model = this.configuredModel || request.model || "claude-sonnet-4-6";
+    const model = this.configuredModel || request.model || "claude-sonnet-4-5";
     const backend = `${this.id}:${model}`;
 
     if (!apiKey) {

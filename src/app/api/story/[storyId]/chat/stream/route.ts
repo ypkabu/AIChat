@@ -46,6 +46,27 @@ type OpenAIStreamEvent = {
   };
 };
 
+type AnthropicStreamEvent = {
+  type?: string;
+  delta?: {
+    type?: string;
+    text?: string;
+  };
+  message?: {
+    usage?: {
+      input_tokens?: number;
+      output_tokens?: number;
+    };
+  };
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+  };
+  error?: {
+    message?: string;
+  };
+};
+
 export async function POST(request: Request, context: { params: Promise<{ storyId: string }> }) {
   const parsed = requestSchema.safeParse(await request.json());
   if (!parsed.success) {
@@ -57,19 +78,21 @@ export async function POST(request: Request, context: { params: Promise<{ storyI
   const allowed = nsfwAllowed(payload.settings.adult_confirmed, payload.settings.nsfw_chat_enabled && payload.session.nsfw_chat_enabled);
   const selection = selectConversationModel(payload, allowed);
 
-  // Stream route only supports OpenAI; other providers fall back to /api/conversation (client handles 409)
   const providerLower = selection.provider.toLowerCase();
-  if (providerLower !== "openai" && !providerLower.startsWith("openai")) {
+  const isOpenAI = providerLower === "openai" || providerLower.startsWith("openai");
+  const isAnthropic = providerLower === "anthropic" || providerLower.startsWith("anthropic") || providerLower === "claude";
+  if (!isOpenAI && !isAnthropic) {
     return new Response("SSE streaming is not supported by this provider", { status: 409 });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = isAnthropic ? process.env.ANTHROPIC_API_KEY : process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return new Response("OPENAI_API_KEY is missing", { status: 409 });
+    return new Response(`${isAnthropic ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY"} is missing`, { status: 409 });
   }
 
-  const model = selection.model || process.env.OPENAI_MODEL || "gpt-4.1-mini";
-  const backend = `openai:${model}`;
+  const model = selection.model || (isAnthropic ? "claude-sonnet-4-5" : process.env.OPENAI_MODEL || "gpt-4.1-mini");
+  const providerName = isAnthropic ? "anthropic" : "openai";
+  const backend = `${providerName}:${model}`;
   const prompt = buildConversationPrompt({
     bundle: payload.bundle,
     session: payload.session,
@@ -117,7 +140,7 @@ export async function POST(request: Request, context: { params: Promise<{ storyI
       let directorSent = false;
       let usage: ConversationResponse["usage"] = {
         backend,
-        provider: "openai",
+        provider: providerName,
         model,
         input_tokens: estimateTokenLikeCount(prompt.systemPrompt),
         output_tokens: 0,
@@ -153,41 +176,65 @@ export async function POST(request: Request, context: { params: Promise<{ storyI
 
       try {
         resetTimeout();
-        const upstream = await fetch("https://api.openai.com/v1/responses", {
-          method: "POST",
-          signal: upstreamAbort.signal,
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            model,
-            stream: true,
-            input: [
-              {
-                role: "developer",
-                content: [
-                  prompt.systemPrompt,
-                  "",
-                  allowed
-                    ? "NSFW会話は成人確認済みの場合のみ許可。ただし禁止カテゴリは絶対に扱わない。合意・成人・創作上の境界を明確に守る。"
-                    : "NSFW会話はOFF。成人向け性的描写、露骨な描写、性的な誘導は出さない。必要なら穏当な会話や場面転換にする。",
-                  "",
-                  "このレスポンスはリアルタイム表示用です。必ず1行1JSONのNDJSONだけを返し、Markdownや説明文は返さない。"
-                ].join("\n")
+        const streamInstruction = [
+          prompt.systemPrompt,
+          "",
+          allowed
+            ? "NSFW会話は成人確認済みの場合のみ許可。ただし禁止カテゴリは絶対に扱わない。合意・成人・創作上の境界を明確に守る。"
+            : "NSFW会話はOFF。成人向け性的描写、露骨な描写、性的な誘導は出さない。必要なら穏当な会話や場面転換にする。",
+          "",
+          "このレスポンスはリアルタイム表示用です。必ず1行1JSONのNDJSONだけを返し、Markdownや説明文は返さない。"
+        ].join("\n");
+
+        const upstream = isAnthropic
+          ? await fetch("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              signal: upstreamAbort.signal,
+              headers: {
+                "x-api-key": apiKey,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json"
               },
-              {
-                role: "user",
-                content: userMessage
-              }
-            ],
-            max_output_tokens: payload.settings.low_cost_mode ? 1400 : 2200
-          })
-        });
+              body: JSON.stringify({
+                model,
+                max_tokens: payload.settings.low_cost_mode ? 1400 : 2200,
+                stream: true,
+                system: streamInstruction,
+                messages: [
+                  {
+                    role: "user",
+                    content: userMessage
+                  }
+                ]
+              })
+            })
+          : await fetch("https://api.openai.com/v1/responses", {
+              method: "POST",
+              signal: upstreamAbort.signal,
+              headers: {
+                Authorization: `Bearer ${apiKey}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                model,
+                stream: true,
+                input: [
+                  {
+                    role: "developer",
+                    content: streamInstruction
+                  },
+                  {
+                    role: "user",
+                    content: userMessage
+                  }
+                ],
+                max_output_tokens: payload.settings.low_cost_mode ? 1400 : 2200
+              })
+            });
 
         if (!upstream.ok || !upstream.body) {
           const body = await upstream.text().catch(() => "");
-          send("error", { message: `OpenAI stream error ${upstream.status}`, fallback: true, detail: body.slice(0, 400) });
+          send("error", { message: `${providerName} stream error ${upstream.status}`, fallback: true, detail: body.slice(0, 400) });
           send("done", {});
           return;
         }
@@ -205,22 +252,44 @@ export async function POST(request: Request, context: { params: Promise<{ storyI
           while (boundary !== -1) {
             const frame = sseBuffer.slice(0, boundary);
             sseBuffer = sseBuffer.slice(boundary + 2);
-            const event = parseOpenAISseFrame(frame);
-            if (event?.type === "response.output_text.delta" && typeof event.delta === "string") {
-              consumeOutputText(event.delta);
-            }
-            if (event?.type === "response.output_text.done" && typeof event.text === "string" && !rawOutput) {
-              consumeOutputText(event.text);
-            }
-            if (event?.type === "response.completed") {
-              usage = {
-                ...usage,
-                input_tokens: event.response?.usage?.input_tokens ?? usage.input_tokens,
-                output_tokens: event.response?.usage?.output_tokens ?? estimateTokenLikeCount(rawOutput)
-              };
-            }
-            if (event?.type === "error" || event?.type === "response.failed") {
-              send("error", { message: event.error?.message ?? "stream_failed", fallback: true });
+            if (isAnthropic) {
+              const event = parseAnthropicSseFrame(frame);
+              if (event?.type === "content_block_delta" && event.delta?.type === "text_delta" && typeof event.delta.text === "string") {
+                consumeOutputText(event.delta.text);
+              }
+              if (event?.type === "message_start") {
+                usage = {
+                  ...usage,
+                  input_tokens: event.message?.usage?.input_tokens ?? usage.input_tokens
+                };
+              }
+              if (event?.type === "message_delta") {
+                usage = {
+                  ...usage,
+                  output_tokens: event.usage?.output_tokens ?? usage.output_tokens
+                };
+              }
+              if (event?.type === "error") {
+                send("error", { message: event.error?.message ?? "stream_failed", fallback: true });
+              }
+            } else {
+              const event = parseOpenAISseFrame(frame);
+              if (event?.type === "response.output_text.delta" && typeof event.delta === "string") {
+                consumeOutputText(event.delta);
+              }
+              if (event?.type === "response.output_text.done" && typeof event.text === "string" && !rawOutput) {
+                consumeOutputText(event.text);
+              }
+              if (event?.type === "response.completed") {
+                usage = {
+                  ...usage,
+                  input_tokens: event.response?.usage?.input_tokens ?? usage.input_tokens,
+                  output_tokens: event.response?.usage?.output_tokens ?? estimateTokenLikeCount(rawOutput)
+                };
+              }
+              if (event?.type === "error" || event?.type === "response.failed") {
+                send("error", { message: event.error?.message ?? "stream_failed", fallback: true });
+              }
             }
             boundary = sseBuffer.indexOf("\n\n");
           }
@@ -298,6 +367,14 @@ export async function POST(request: Request, context: { params: Promise<{ storyI
 }
 
 function parseOpenAISseFrame(frame: string): OpenAIStreamEvent | null {
+  return parseSseJsonData(frame) as OpenAIStreamEvent | null;
+}
+
+function parseAnthropicSseFrame(frame: string): AnthropicStreamEvent | null {
+  return parseSseJsonData(frame) as AnthropicStreamEvent | null;
+}
+
+function parseSseJsonData(frame: string): Record<string, unknown> | null {
   const dataLines = frame
     .split(/\r?\n/)
     .filter((line) => line.startsWith("data:"))
@@ -306,7 +383,7 @@ function parseOpenAISseFrame(frame: string): OpenAIStreamEvent | null {
   const data = dataLines.join("\n");
   if (data === "[DONE]") return null;
   try {
-    return JSON.parse(data) as OpenAIStreamEvent;
+    return JSON.parse(data) as Record<string, unknown>;
   } catch {
     return null;
   }

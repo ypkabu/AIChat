@@ -52,7 +52,7 @@
 - Foreshadowing Manager は伏線を DB に保存し、`clue_text` と非公開の `hidden_truth` を分ける。`hidden_truth` は reveal 条件を満たすまで通常プレイUIに表示しない。
 - Narrative Quality Check は各AI応答の新情報、具体行動、感情変化、伏線、選択圧、前進度を評価し、低品質時は次ターン改善指示として保存する。
 - プレイ進行モードは `auto`, `normal`, `choice_heavy`。オートは最大 3 回まで連続生成し、重要分岐、NSFW突入前、画像候補、コスト上限接近時は停止する。
-- プレイ会話は server-side route `/api/story/{storyId}/chat/stream` を優先し、失敗時は `/api/conversation` へ fallback する。`CONVERSATION_PROVIDER=openai` と `OPENAI_API_KEY` が設定されている場合は OpenAI Responses API を使い、未設定時は mock provider または安全な fallback narration を返す。
+- プレイ会話は server-side route `/api/story/{storyId}/chat/stream` を優先し、失敗時は `/api/conversation` へ fallback する。OpenAI は Responses API の SSE、Anthropic/Claude は Messages API の SSE (`content_block_delta` / `text_delta`) を既存NDJSON解釈器へ流し込む。`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` は server-side env だけから読む。
 - バックグラウンド解析は `/api/background`、品質チェックは `/api/quality`。どちらも安価モデルを使い、失敗してもチャット表示を止めない。
 - 古い会話は `/api/summarize` で構造化サマリー化し、`story_summaries` に保存して再利用する。直近会話は最大15件を目安にし、記憶・関係性・明示ユーザー情報は削らない。
 - 用途別モデル選択は NSFW、重要イベント smart、低コスト、通常の順で行う。API キーは server-side env だけから読む。

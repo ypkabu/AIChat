@@ -135,6 +135,9 @@ export function buildConversationPrompt(input: PromptBuildInput): PromptBuildRes
     "",
     "あなたはインタラクティブストーリーの語り手です。",
     buildOutputStyleRules(outputMode, inputType),
+    "主人公/{{user}}は、ユーザープロフィールで明示的に別設定がある場合を除き成人男性として扱う。性別・年齢・立場を勝手に変更しない。",
+    "キャラクター口調固定: 各キャラは性格、口調、一人称、{{user}}への呼称、サンプル台詞を毎ターン参照し、別人格のような話し方に変えない。",
+    "キャラの好意・照れ・怒りなどの感情変化は、元の性格の範囲内で表現する。急に過度に従順、暴力的、無口、古風、説明口調にしない。",
     "アプリ側が人格、関係値、メモリ、ストーリー状態を保持します。あなたは必要な生成だけを行います。",
     "Info Box の hidden_intent / inner_thoughts は非公開情報。本文、台詞、選択肢に直接出さず、背景理解のみに使う。",
     "NSFW は成人確認済みかつ該当トグル ON の時だけ許可されます。禁止カテゴリは NSFW ON でも扱いません。",
@@ -163,11 +166,11 @@ export function buildConversationPrompt(input: PromptBuildInput): PromptBuildRes
     (currentSceneCharacters.length ? currentSceneCharacters : bundle.characters.slice(0, 3))
       .map(
         (character) =>
-          `- ${character.name}: 役割=${shorten(character.role, 70)}; 性格=${shorten(character.personality, 90)}; 口調=${shorten(character.speaking_style, 70)}; 一人称=${character.first_person}; 呼称=${character.user_call_name}`
+          `- ${character.name}: 役割=${shorten(character.role, 70)}; 性格=${shorten(character.personality, 120)}; 口調=${shorten(character.speaking_style, 100)}; 一人称=${character.first_person}; 呼称=${character.user_call_name}; 台詞例=${shorten(character.sample_dialogues, 140)}`
       )
       .join("\n"),
     "",
-    `ユーザー: ${userProfile?.display_name ?? "ユーザー"} / ${shorten(userProfile?.role ?? "", 60)} / ${shorten(userProfile?.personality ?? "", 60)} / ${shorten(userProfile?.speaking_style ?? "", 60)}`,
+    `ユーザー: ${userProfile?.display_name ?? "ユーザー"} / 基本性別=男性（明示設定があればそれを優先） / ${shorten(userProfile?.role ?? "", 70)} / ${shorten(userProfile?.personality ?? "", 70)} / ${shorten(userProfile?.speaking_style ?? "", 70)}`,
     "",
     `ストーリー状態: scene=${session.current_scene_key}, chapter=${session.chapter_index}, progress=${session.progress_percent}, objective=${shorten(session.scene_objective, 80)}`,
     `短い状況: ${situationSummary}`,
@@ -310,6 +313,8 @@ function buildOutputStyleRules(outputMode: "json" | "ndjson", inputType: "free_t
     "- 長い段落を書くな。各 content は最大4行(4つの\\n区切り)まで。",
     "- response_length が short でも item 数は減らすな。短くするのは各 item の文量だけ。",
     "- 同じキャラが連続で2つの dialogue/character item を出すな。間にナレーションか別キャラを挟め。",
+    "- キャラ発言は必ずそのキャラの一人称、呼称、語尾、テンポを守る。サンプル台詞から外れた硬い説明口調や別キャラ風の語尾にしない。",
+    "- キャラが知らない hidden_truth や内部メモリを、口調の揺れや独白で漏らさない。",
     "",
     buildUserDescriptionRules(inputType),
     "",
