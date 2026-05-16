@@ -283,8 +283,11 @@ export function buildVisualPrompt(input: BuildVisualPromptInput): BuiltVisualPro
   // 6. imageKindに応じた追加指示
   const kindHints: string[] = [];
   if (input.imageKind === "expression_variant") {
+    // 服装と画風は固定するが、表情とポーズは「現在のナラティブ」に従って変化させる。
+    // 完全固定にすると、文章で「歩き出す/顔を逸らす」と書いてあるのに
+    // 画像は中立のまま固まり、見ているシーンと乖離する。
     kindHints.push(
-      "same character pose and outfit as previous frame, only the facial expression changes, keep composition and lighting identical"
+      "keep the same outfit and the same overall lighting, but adapt the facial expression and pose to match the current narrative beat"
     );
   } else if (input.imageKind === "event_cg") {
     kindHints.push("event CG, dramatic composition, key visual moment, polished color grading");

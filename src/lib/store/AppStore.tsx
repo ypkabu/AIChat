@@ -438,12 +438,71 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         // Process visualCue asynchronously – never blocks conversation display
         if (result.visualCue?.shouldUpdateVisual) {
           void resolveVisualCueRef.current?.(sessionId, result.visualCue);
+        } else {
+          // AIがvisualCueを発火しなくても、character_statesのmood/poseが
+          // 直前と比べて変わっていれば自動でexpression_variantをトリガする。
+          // これにより「文章では赤面しているのに画像は中立顔のまま」を防ぐ。
+          const prevStates = state.sessionCharacterStates.filter((s) => s.session_id === sessionId);
+          const updatedCharIds = (result.infoboxUpdate?.characterStates ?? [])
+            .filter((cs) => {
+              const prev = prevStates.find((p) => p.character_id === cs.characterId);
+              const updates = cs.updates ?? {};
+              const newMood = (updates.mood ?? "").toString().trim();
+              const newPose = (updates.pose ?? "").toString().trim();
+              const moodChanged = Boolean(newMood) && newMood !== (prev?.mood ?? "");
+              const poseChanged = Boolean(newPose) && newPose !== (prev?.pose ?? "");
+              return moodChanged || poseChanged;
+            })
+            .map((cs) => cs.characterId);
+          if (updatedCharIds.length > 0) {
+            const env = state.sessionEnvironmentStates.find((e) => e.session_id === sessionId);
+            const session = state.sessions.find((s) => s.id === sessionId);
+            const bundle = session ? getBundle(session.scenario_id) : null;
+            if (env && bundle) {
+              const charNames = updatedCharIds
+                .map((id) => bundle.characters.find((c) => c.id === id)?.name)
+                .filter((n): n is string => Boolean(n));
+              const targetUpdate = result.infoboxUpdate?.characterStates?.find((cs) =>
+                updatedCharIds.includes(cs.characterId)
+              );
+              const newMood = (targetUpdate?.updates?.mood ?? "").toString();
+              const newPose = (targetUpdate?.updates?.pose ?? "").toString();
+              const { normalizeExpression: normExpr } = await import("@/lib/ai/image/visualPromptBuilder");
+              const syntheticCue: VisualCue = {
+                shouldUpdateVisual: true,
+                updateType: "expression_variant",
+                reason: "auto:character_state_changed",
+                sceneKey: env.scene_key || session?.current_scene_key || "default_scene",
+                location: env.location || null,
+                timeOfDay: env.time || null,
+                weather: env.weather || null,
+                activeCharacters: charNames,
+                targetCharacter: charNames[0] ?? null,
+                expression: normExpr(newMood) ?? null,
+                pose: newPose || null,
+                cameraDistance: "medium",
+                pov: "first_person",
+                priority: "medium",
+                qualityPreset: state.settings.expression_variant_quality || "draft",
+                eventCg: false,
+                promptSummary: env.recent_event || env.scene || null
+              };
+              console.info("[scene_visual] auto-trigger expression_variant from mood/pose diff", {
+                sessionId,
+                charNames,
+                newMood,
+                newPose,
+                normalizedExpr: normExpr(newMood)
+              });
+              void resolveVisualCueRef.current?.(sessionId, syntheticCue);
+            }
+          }
         }
       } catch (error) {
         console.warn("[AI Background] Jobs skipped", error);
       }
     },
-    [state.foreshadowingItems, state.relationships, state.sessionEnvironmentStates, state.sessionCharacterStates]
+    [state.foreshadowingItems, state.relationships, state.sessionEnvironmentStates, state.sessionCharacterStates, state.sessions, getBundle, state.settings]
   );
 
   const runConversationSummary = useCallback(

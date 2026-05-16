@@ -369,7 +369,7 @@ export async function POST(request: Request) {
               "planned の既存伏線を初めて本文に出した場合は introduce、introduced/developing/ready を重ねた場合だけ reinforce を使ってください。",
               "sensitive/explicit memory はユーザーが明示した内容だけ。推測で保存候補にしない。",
               "imageCue は重要イベント/章開始/特別分岐の候補判定だけです。毎ターン画像化候補を出さない。",
-              "visualCue: シーン背景画像の更新指示。shouldUpdateVisual=trueにする条件: 場所移動(base_scene)、新キャラ登場(base_scene)、感情が大きく変化(expression_variant)、重要イベント(event_cg)、章開始(base_scene)。通常の会話継続中はshouldUpdateVisual=false。同じ場所/キャラ/状況の会話継続は shouldUpdateVisual=false。sceneKeyは場所+状況を表す英語スネークケース例: classroom_afternoon、inn_room_night。expressionは登場キャラの現在の感情。promptSummaryは50字以内でシーンを説明。",
+              "visualCue: 画像の更新指示。次のいずれかに当てはまれば必ず shouldUpdateVisual=true で返す: (1) 場所が変わった → updateType=base_scene、(2) 新しいキャラが登場した → base_scene、(3) アクティブキャラの感情/表情/赤面/視線が変わった → expression_variant、(4) アクティブキャラの姿勢/動作（歩き出す、振り返る、距離が近づく、横を向く等）が変わった → expression_variant、(5) 重要イベント・告白・キス・接触などの見せ場 → event_cg、(6) 章開始 → base_scene。場所もキャラも感情も動作も完全に同じ会話継続だけ shouldUpdateVisual=false にする。判断に迷うときは true 側に倒す。pov は常に first_person（主人公は画面に出ない）。sceneKey は英語スネークケース（例: empty_classroom_with_miu_sunset）。expression は neutral/annoyed/smile/blush/serious/surprised/worried/embarrassed のいずれか。promptSummary は 50字以内で「この瞬間ヒロインがどう見えているか」だけ書く（主人公への言及は禁止）。",
               "非合意、近親、実在人物性的ディープフェイク、搾取、違法、動物との性的内容など禁止カテゴリは除外します。",
               "hidden_intent と inner_thoughts は非公開情報。本文や選択肢に直接出さないために使ってよいが、UI表示は Debug のみです。",
               "JSONのみ返してください。"
