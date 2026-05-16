@@ -700,7 +700,7 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                   setChoicesVisible(true);
                   window.requestAnimationFrame(() => scrollToBottom("smooth"));
                 }}
-                className="min-h-11 rounded-md border border-brand/30 bg-brand/10 px-3 text-sm font-semibold text-brand transition-colors hover:bg-brand/20"
+                className="min-h-11 rounded-full border border-brand/30 bg-brand/10 px-4 text-sm font-semibold text-brand transition-colors hover:bg-brand/20"
               >
                 選択肢を表示（{session.pending_choices.length}件）
               </button>
@@ -719,48 +719,6 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
                   }
                 }}
               />
-            )}
-            <button
-              type="button"
-              onClick={handleContinue}
-              disabled={busy || !session.auto_continue_allowed || (session.play_pace_mode === "auto" && autoRunning)}
-              className={`min-h-11 rounded-md px-3 text-sm font-semibold shadow-soft disabled:opacity-40 ${
-                session.play_pace_mode === "auto"
-                  ? "bg-brand text-canvas"
-                  : session.play_pace_mode === "choice_heavy"
-                    ? "border border-white/10 bg-panel2 text-muted"
-                    : "border border-white/10 bg-panel2 text-ink"
-              }`}
-            >
-              続きを生成
-            </button>
-            {session.play_pace_mode !== "choice_heavy" && (
-              <button
-                type="button"
-                onClick={() => void handleSilentContinue()}
-                disabled={busy}
-                className={`min-h-9 rounded-md px-3 text-sm disabled:opacity-40 ${
-                  session.play_pace_mode === "auto"
-                    ? "border border-brand/40 bg-panel text-brand"
-                    : "border border-white/10 bg-panel2 text-muted"
-                }`}
-              >
-                {currentContinueSuggestion?.label ?? "続きを見る"}
-              </button>
-            )}
-            {currentSmartReplies.length > 0 && !busy && !draft && (
-              <div className="flex flex-wrap gap-1.5">
-                {currentSmartReplies.map((reply) => (
-                  <button
-                    key={reply.id}
-                    type="button"
-                    onClick={() => setDraft(reply.label)}
-                    className="max-w-full rounded-full border border-white/15 bg-panel px-3 py-1.5 text-left text-xs text-muted transition-colors hover:border-brand/40 hover:text-ink [overflow-wrap:anywhere]"
-                  >
-                    {reply.label}
-                  </button>
-                ))}
-              </div>
             )}
           </div>
         )}
@@ -790,8 +748,25 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
           showAuxiliaryActions={showBottomActions}
           onChange={setDraft}
           onSend={() => void submit(draft)}
+          onContinue={handleContinue}
           onGenerateImage={(kind) => void requestImage(kind)}
         />
+        {showBottomActions && currentSmartReplies.length > 0 && !busy && !draft && (
+          <div className="max-h-[30dvh] overflow-y-auto overscroll-contain border-t border-white/[0.04] bg-[#0e1015] px-3 pb-[calc(env(safe-area-inset-bottom)+4px)] pt-2">
+            <div className="grid gap-2">
+              {currentSmartReplies.map((reply) => (
+                <button
+                  key={reply.id}
+                  type="button"
+                  onClick={() => void submit(reply.label)}
+                  className="rounded-xl bg-[#1a1d28] px-4 py-3 text-left text-[14px] leading-6 text-ink/80 ring-1 ring-white/[0.06] transition-colors active:bg-[#22263a] [overflow-wrap:anywhere]"
+                >
+                  {reply.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </main>
     </>

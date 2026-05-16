@@ -1,6 +1,6 @@
 "use client";
 
-import { ImagePlus, Send, Sparkles, X } from "lucide-react";
+import { ImagePlus, Play, Sparkles, X, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export function Composer({
@@ -11,6 +11,7 @@ export function Composer({
   showAuxiliaryActions = true,
   onChange,
   onSend,
+  onContinue,
   onGenerateImage
 }: {
   value: string;
@@ -20,6 +21,7 @@ export function Composer({
   showAuxiliaryActions?: boolean;
   onChange: (value: string) => void;
   onSend: () => void;
+  onContinue?: () => void;
   onGenerateImage: (kind: "scene" | "event" | "character" | "icon") => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -58,11 +60,11 @@ export function Composer({
           <button
             type="button"
             disabled={!showImageActions || disabled}
-            className="grid min-h-11 min-w-11 place-items-center rounded-md bg-panel2 text-muted disabled:opacity-40"
+            className="grid min-h-11 min-w-11 place-items-center rounded-full bg-panel2 text-muted disabled:opacity-40"
             onClick={() => setOpen((current) => !current)}
             aria-label="画像生成メニュー"
           >
-            <ImagePlus className="h-5 w-5" aria-hidden />
+            <Zap className="h-4 w-4" aria-hidden />
           </button>
         )}
         <textarea
@@ -73,18 +75,30 @@ export function Composer({
             if ((event.metaKey || event.ctrlKey) && event.key === "Enter") onSend();
           }}
           rows={1}
-          placeholder={allowFreeInput ? "返答を入力" : "自由入力はOFFです"}
-          className="max-h-32 min-h-11 flex-1 resize-none rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 text-base leading-6 text-ink outline-none transition-all duration-200 focus:border-brand/40 focus:ring-1 focus:ring-brand/20 focus:shadow-glow-sm disabled:opacity-50"
+          placeholder={allowFreeInput ? "メッセージ" : "自由入力はOFFです"}
+          className="max-h-32 min-h-11 flex-1 resize-none rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-base leading-6 text-ink outline-none transition-all duration-200 focus:border-brand/40 focus:ring-1 focus:ring-brand/20 disabled:opacity-50"
         />
-        <button
-          type="button"
-          disabled={disabled || !value.trim()}
-          onClick={onSend}
-          className="grid min-h-11 min-w-11 place-items-center rounded-lg bg-gradient-brand text-canvas shadow-glow-sm transition-all duration-150 active:scale-95 disabled:opacity-40"
-          aria-label="送信"
-        >
-          {disabled ? <Sparkles className="h-5 w-5 animate-pulse" aria-hidden /> : <Send className="h-5 w-5" aria-hidden />}
-        </button>
+        {value.trim() ? (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={onSend}
+            className="grid min-h-11 min-w-11 place-items-center rounded-full bg-gradient-to-br from-[#5b4dc7] to-[#4834a8] text-white shadow-[0_2px_8px_rgba(91,77,199,0.3)] transition-all duration-150 active:scale-95 disabled:opacity-40"
+            aria-label="送信"
+          >
+            {disabled ? <Sparkles className="h-5 w-5 animate-pulse" aria-hidden /> : <Play className="h-5 w-5 fill-current pl-0.5" aria-hidden />}
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={onContinue}
+            className="grid min-h-11 min-w-11 place-items-center rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-[0_2px_8px_rgba(16,185,129,0.3)] transition-all duration-150 active:scale-95 disabled:opacity-40"
+            aria-label="続き"
+          >
+            {disabled ? <Sparkles className="h-5 w-5 animate-pulse" aria-hidden /> : <Play className="h-5 w-5 fill-current pl-0.5" aria-hidden />}
+          </button>
+        )}
       </div>
     </div>
   );
