@@ -434,3 +434,17 @@
 - [x] Browserスマホ幅確認: 設定画面でAnthropic選択、チャットでClaude stream/typewriter、上スクロール時の選択肢非表示、「新着あり ↓ 最新へ」復帰、raw NDJSON非表示化を確認。
 - [ ] 開発ブラウザでは20MB VRMのロード開始ログまでは確認できたが、表示完了前にスクリーンショット取得がタイムアウト。iPhone実機またはproduction環境でVRM表示完了・負荷・位置を追加確認する。
 - [x] Supabase本番DBへ `20260515120000_prefer_anthropic_conversation_models.sql` を適用し、migration history も applied に修復。新規/既存remote app_settingsのDB初期値をClaude中心へ揃えた。
+
+## 画像生成POV/シーン整合性/表情差分/品質強化 (2026-05-16)
+
+- [x] `src/lib/ai/image/visualPromptBuilder.ts` を新設。一人称視点強制、主人公非表示の明示、negative promptに主人公混入除外を必ず入れる Visual Prompt Builder を実装。
+- [x] `src/lib/ai/image/visualStateResolver.ts` を新設。visualCueをDB側の `session_environment_state` / `session_character_states` と照合して補正する Visual State Resolver を実装。POVは常に first_person に強制し、cueにあるがDBにいないキャラはdropする。
+- [x] `generateSceneBackground` を新Builder/Resolver経由に置き換え、positive prompt / negative prompt / promptSummary / consistencyKey をすべて生成・送信・保存するように変更。
+- [x] `ImageGenerationRequest` 型に `negativePrompt` / `imageKind` / `sceneKey` / `promptSummary` / `consistencyKey` を追加し、`/api/images/generate` で受け取って backend へ転送できるようにした。
+- [x] Runpod / ComfyUI adapter が caller提供 negative prompt を優先採用し、NSFW除外接頭辞を二重付与しないように修正。
+- [x] `resolveVisualCue` の expression_variant 再利用ロジックに、`fallbackForExpression` (blush↔embarrassed, angry↔annoyed, scared↔worried 等) を追加。
+- [x] 画像予算消費 70% / 80% で `base_image_quality` / `event_cg_quality` / `expression_variant_quality` を自動ダウングレードする `downgradeQualityForBudget` を追加。
+- [x] 画像生成前後に `console.info("[scene_visual] generate", ...)` / `console.info("[image.generate] completed", ...)` を出し、sceneKey / location / activeCharacters / outfit / expression / promptSummary / consistencyKey / diagnostics をログする。
+- [x] `usage_logs.meta` に上記すべて + `negativePromptSummary` / `diagnostics` を保存。`generated_images.continuity_group_id` / `cost_estimated_jpy` / `latency_ms` も併せて保存するよう変更。
+- [x] `npm run typecheck` / `npm run lint` / `npm run build` 成功。
+- [ ] 本番ブラウザでの POV 強制ON動作確認 (生成画像で主人公が映らないか) を実機Runpod生成で確認する。

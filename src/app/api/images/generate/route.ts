@@ -7,6 +7,7 @@ export const maxDuration = 300;
 
 const requestSchema = z.object({
   prompt: z.string().min(1),
+  negativePrompt: z.string().nullable().optional(),
   sessionId: z.string(),
   scenarioId: z.string(),
   triggerType: z.enum(["manual", "major_event", "chapter_start", "special_branch"]),
@@ -20,7 +21,11 @@ const requestSchema = z.object({
   nsfwImageProvider: z.string().optional(),
   nsfwImageModel: z.string().optional(),
   quality: z.string(),
-  size: z.string()
+  size: z.string(),
+  imageKind: z.enum(["regular", "background", "expression_variant", "event_cg", "manual_scene"]).optional(),
+  sceneKey: z.string().nullable().optional(),
+  promptSummary: z.string().nullable().optional(),
+  consistencyKey: z.string().nullable().optional()
 });
 
 export async function POST(request: Request) {
@@ -38,9 +43,11 @@ export async function POST(request: Request) {
   const selected = resolveImageSelection(payload, nsfw);
   const backend = getImageBackend(selected.backendProvider, selected.model);
 
+  const startedAt = Date.now();
   try {
     const response = await backend.generateImage({
       prompt: payload.prompt,
+      negativePrompt: payload.negativePrompt ?? null,
       sessionId: payload.sessionId,
       scenarioId: payload.scenarioId,
       triggerType: payload.triggerType,
@@ -49,11 +56,40 @@ export async function POST(request: Request) {
       quality: payload.quality,
       size: payload.size,
       provider: selected.provider,
-      model: selected.model
+      model: selected.model,
+      imageKind: payload.imageKind,
+      sceneKey: payload.sceneKey ?? null,
+      promptSummary: payload.promptSummary ?? null,
+      consistencyKey: payload.consistencyKey ?? null
     });
 
-    return NextResponse.json(response);
+    const latencyMs = Date.now() - startedAt;
+    // Debug log: ズレた時に追えるよう、生成条件を構造化ログとして出す
+    console.info("[image.generate] completed", {
+      provider: response.usage.provider,
+      backend: response.usage.backend,
+      model: response.usage.model,
+      imageKind: payload.imageKind ?? "regular",
+      sceneKey: payload.sceneKey ?? null,
+      quality: payload.quality,
+      size: payload.size,
+      promptSummary: payload.promptSummary ?? response.promptSummary,
+      consistencyKey: payload.consistencyKey ?? null,
+      latency_ms: latencyMs,
+      cost_estimated_jpy: response.usage.estimated_cost_jpy,
+      isNsfw: response.isNsfw
+    });
+
+    return NextResponse.json({ ...response, latencyMs });
   } catch (error) {
+    console.error("[image.generate] failed", {
+      provider: selected.provider,
+      model: selected.model,
+      imageKind: payload.imageKind ?? "regular",
+      sceneKey: payload.sceneKey ?? null,
+      promptSummary: payload.promptSummary ?? null,
+      error: error instanceof Error ? error.message : String(error)
+    });
     return NextResponse.json({ error: error instanceof Error ? error.message : "Image generation failed" }, { status: 400 });
   }
 }

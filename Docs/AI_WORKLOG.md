@@ -1708,3 +1708,100 @@
 - 開発ブラウザでは20MB VRMの読み込み完了前にスクリーンショット取得がタイムアウトした。production/iPhone実機で、VRM表示完了、位置、負荷を追加確認する必要がある。
 - `20260515120000_prefer_anthropic_conversation_models.sql` は Supabase CLI で本番DBへ適用し、migration history も applied に修復した。DB default と既存 `app_settings` rows もClaude中心へ揃えた。
 - Anthropic streaming実装は公式SSE仕様の `message_start` / `content_block_delta` / `message_delta` に基づく。
+
+
+## 2026-05-16 (画像生成POV/シーン整合性/表情差分/品質強化)
+
+### 背景
+
+これまでの画像生成は以下の問題があった。
+
+- 主人公の一人称視点が固定されず、主人公自身が画像に映ることがあった。
+- AIが返す `visualCue` をそのまま信頼していたため、location/activeCharacters/outfit が現在シーン (session_environment_state / session_character_states) とズレることがあった。
+- Negative prompt は backend 側で固定文字列を組んでおり、「主人公混入」「第三者視点」「自撮り構図」などの除外指示が含まれていなかった。
+- 表情差分は完全一致のみ再利用していたため、`embarrassed` を要求された時に既存の `blush` が再利用されず、毎回新規生成していた。
+- `image_monthly_budget_jpy` を消費しても品質preset は変更されず、予算切れ直前に高品質生成が走る可能性があった。
+- 画像生成のログは `imageKind` / `sceneKey` / `bundleId` だけで、ズレた時に prompt / negative prompt / 解決済みシーン状態を後追いできなかった。
+
+### 実装内容
+
+#### 1. Visual Prompt Builder の分離 (`src/lib/ai/image/visualPromptBuilder.ts`)
+
+- 画像生成promptを「会話AIの応答(visualCue)」とは独立に組み立てる純粋関数群。
+- `buildVisualPrompt(input)` が `{ positivePrompt, negativePrompt, promptSummary, consistencyKey }` を返す。
+- positivePromptには必ず以下を含む。
+  - 画風タグ (visual_novel / anime / romance / fantasy / adventure / dark)
+  - **POV強制文** (英文 + 日本語) - `first-person POV from the protagonist's eyes, the protagonist is not visible in the image, no protagonist body / face / hands / arms / legs / back view / shadow / reflection` + `主人公の一人称視点。主人公本人は画像に映さない…`
+  - シーン (location / timeOfDay / weather / sceneSummary)
+  - active characters (id, name, appearance, outfit, expression, pose, mood, relationshipToUser)
+  - camera distance (close-up / medium / wide)
+  - imageKind 別の追加指示 (expression_variant では「同じ構図・服装で表情だけ変える」)
+  - 品質preset別のタグ (draft / standard / high / ultra)
+- negativePromptには `protagonist`, `viewer body`, `viewer hands`, `selfie`, `third person view`, `over the shoulder`, `back of protagonist`, `extra male`, `duplicate character`, `inconsistent outfit`, `wrong location`, `wrong background` などを必ず含み、NSFW無効時は `nsfw, nude, explicit` を先頭に付ける。
+- `normalizeExpression` と `fallbackForExpression` を提供し、表情差分の近似フォールバック (embarrassed→blush, angry→annoyed, scared→worried 等) を一元化。
+- `consistencyKey` を `scene × outfit × cameraDistance` で生成し、`generated_images.continuity_group_id` へ保存。
+
+#### 2. Visual State Resolver (`src/lib/ai/image/visualStateResolver.ts`)
+
+- visualCue を DB側の `SessionEnvironmentState` / `SessionCharacterState` と照合して補正する。
+- 補正ルール:
+  - `cue.pov !== "first_person"` なら強制で `first_person` に置き換え (diagnostics ログ)。
+  - `location` は DB > cue。違っていれば `location_overridden_by_db` を diagnostics に積む。
+  - `activeCharacters` は DB の `session_character_states` を信頼。cue にあるが DB にいないキャラは無視。
+  - 各キャラの `outfit` / `mood` / `pose` / `relationship` は DB を優先。
+  - `cue.eventCg=true` でも `priority="high"` または `updateType="event_cg"` でなければ `eventCg=false` にデモート。
+  - 既存variantの expression list を渡せば、resolver 内でも fallback を試みる。
+- `buildPromptFromResolved` が resolver の出力を builder に流す薄いラッパー。
+
+#### 3. AppStore 統合
+
+- `generateSceneBackground` を全面リファクタ。
+  - DB状態 (environmentState, characterStates) を集めて `resolveVisualState` を呼ぶ。
+  - `buildPromptFromResolved` で positive / negative / summary / consistencyKey を取得。
+  - 過去の同じ scene_key の bundle の base image summary を渡して連続性ヒントを与える。
+  - 画像予算消費に応じて `downgradeQualityForBudget` で `draft / standard / high / ultra` を自動ダウングレード (70% / 80% で段階的に落ちる)。
+  - 生成前に `console.info("[scene_visual] generate", …)` で sceneKey / location / activeCharacters / outfits / expressions / imageKind / quality / consistencyKey / diagnostics をログ。
+  - 生成済み画像の `prompt_summary` には builder の構造化summaryを保存。`continuity_group_id` には consistencyKey を保存。`cost_estimated_jpy` / `latency_ms` も保存。
+  - `usage_logs.meta` にも上記＋`negativePromptSummary` / `diagnostics` を保存。
+- `resolveVisualCue` の `expression_variant` 再利用に fallback を導入。
+  - 完全一致がなければ `fallbackForExpression` で近似表情を探し、見つかればそれを再利用 (DB上の画像を流用)。
+  - それでも見つからなければ予算チェック後に新規生成。
+
+#### 4. バックエンド層
+
+- `ImageGenerationRequest` 型に `negativePrompt` / `imageKind` / `sceneKey` / `promptSummary` / `consistencyKey` を追加。
+- `/api/images/generate` route で受け取り、backend に転送 + 生成後の `console.info("[image.generate] completed", …)` ログ + `latencyMs` をレスポンスに添付。
+- `RunpodImageBackend` / `ComfyUIImageBackend` を、caller提供 `negativePrompt` を優先採用するよう修正。NSFW無効時の `nsfw, nude, explicit` 接頭辞は既に含まれていれば二重付与しない。
+- レガシー `buildSceneBackgroundPrompt` (AppStore 内の旧プロンプト組立関数) を削除。
+
+### 触ったファイル
+
+- `src/lib/ai/image/visualPromptBuilder.ts` (新規)
+- `src/lib/ai/image/visualStateResolver.ts` (新規)
+- `src/lib/ai/image/runpodAdapter.ts` (caller negative prompt採用)
+- `src/lib/ai/image/comfyuiAdapter.ts` (caller negative prompt採用)
+- `src/lib/ai/imageBackends.ts` (型整合のみ、変更なし)
+- `src/lib/ai/types.ts` (`ImageGenerationRequest` に negative prompt / meta 追加)
+- `src/app/api/images/generate/route.ts` (受信＋転送＋構造化ログ＋latencyMs返却)
+- `src/lib/store/AppStore.tsx` (`generateSceneBackground` 全面リファクタ、`resolveVisualCue` に表情fallback、品質auto-downgrade、`buildSceneBackgroundPrompt` 削除)
+- `Docs/AI_TASKS.md`
+- `Docs/AI_WORKLOG.md`
+
+### 確認
+
+- `npm run typecheck` → 成功。
+- `npm run lint` → 既存warning 3件のみ、新規エラー/warning 0。
+- `npm run build` → 全15ルート成功 (Turbopack 4.7s)。
+
+### 未確認 / 仮実装
+
+- 実Runpodエンドポイントでの「主人公が映らない」目視確認は未実施。本番デプロイ後にスマホ実機で確認する必要がある。
+- `image_generation_jobs` テーブルへの永続化は現アーキテクチャでは行っていない (クライアント側 AppStore state にのみ保持)。`consistency_key` / `resolved_visual_state_json` のDB migration は将来 jobs を永続化するタイミングで追加する。
+- 「この画像は現在シーンと違う」ユーザフィードバックボタン、手動再生成で表情だけ / 背景だけ / qualityPreset変更を選ばせるUIは未実装。`requestSceneBackground` (ChatScreen) は単純な base_scene 再生成のみ提供。
+- 自動テストは依然として未導入 (`npm test = npm run typecheck`)。今後の改善として visualPromptBuilder / visualStateResolver の unit test を追加する余地がある。
+
+### 注意点
+
+- POV強制とNegative Promptの強化は、生成バックエンドが negative prompt に対応している場合のみ効果がある (Runpod ComfyUI workflow および Runpod 公式 Flux endpoint は対応)。Mockバックエンドは SVG プレースホルダーなので影響なし。
+- `downgradeQualityForBudget` は `image_monthly_budget_jpy` を参照する。`image_budget_jpy` (旧設定) との関係は今回変更していない。
+- visualStateResolver は cue が `activeCharacters=[]` の場合は「DBのactiveキャラ全部」を採用する。これにより visualCue が手薄な heuristic fallback でも、DB状態から正しいキャラが描かれるようになる。

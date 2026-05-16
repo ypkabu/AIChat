@@ -188,6 +188,8 @@ export interface ConversationBackend {
 
 export type ImageGenerationRequest = {
   prompt: string;
+  /** 呼び出し側で組み立てたnegative prompt。指定があればバックエンド既定より優先される。 */
+  negativePrompt?: string | null;
   sessionId: string;
   scenarioId: string;
   triggerType: ImageTriggerType;
@@ -197,6 +199,11 @@ export type ImageGenerationRequest = {
   size: string;
   provider?: string;
   model?: string;
+  /** デバッグ・ログ用のメタ */
+  imageKind?: "regular" | "background" | "expression_variant" | "event_cg" | "manual_scene";
+  sceneKey?: string | null;
+  promptSummary?: string | null;
+  consistencyKey?: string | null;
 };
 
 export type ImageGenerationResponse = {

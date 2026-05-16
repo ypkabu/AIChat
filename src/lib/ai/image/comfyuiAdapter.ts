@@ -112,9 +112,13 @@ export class ComfyUIImageBackend implements ImageBackend {
     const steps = STEPS_MAP[request.quality] ?? STEPS_MAP.standard;
     const seed = Math.floor(Math.random() * 2 ** 32);
 
+    const callerNegative = (request.negativePrompt ?? "").trim();
+    const baseNegative = callerNegative.length > 0
+      ? callerNegative
+      : "worst quality, low quality, blurry, bad anatomy";
     const negativePrompt = isNsfw
-      ? "worst quality, low quality, blurry, bad anatomy"
-      : "nsfw, nude, explicit, worst quality, low quality, blurry, bad anatomy";
+      ? baseNegative
+      : (baseNegative.includes("nsfw") ? baseNegative : `nsfw, nude, explicit, ${baseNegative}`);
 
     const workflow = buildWorkflow({
       prompt: request.prompt,

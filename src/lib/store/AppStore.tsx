@@ -48,6 +48,8 @@ import type {
   VoiceGenerationJob
 } from "@/lib/domain/types";
 import { extractVoiceText } from "@/lib/ai/voice/voiceText";
+import { buildPromptFromResolved, resolveVisualState } from "@/lib/ai/image/visualStateResolver";
+import type { VisualStyle } from "@/lib/ai/image/visualPromptBuilder";
 import { clamp, estimateTokenLikeCount, newId, nowIso } from "@/lib/utils";
 import type { ConversationResponse, ConversationStreamEvent } from "@/lib/ai/types";
 import type { BackgroundJobsResponse } from "@/lib/ai/types";
@@ -1455,26 +1457,41 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       );
 
       if (cue.updateType === "expression_variant" && existingBundle?.base_image_id) {
-        // Look for existing variant
+        // 1) 完全一致のvariantを探す
         const normalizedExpr = normalizeExpression(cue.expression);
-        const existingVariant = state.sceneVisualVariants.find(
+        const completedVariants = state.sceneVisualVariants.filter(
           (v) =>
             v.bundle_id === existingBundle.id &&
             v.variant_type === "expression" &&
-            v.expression === normalizedExpr &&
             v.generation_status === "completed" &&
             v.image_id
         );
-        if (existingVariant?.image_id) {
-          // Use existing variant image – update visual state only
-          updateSceneVisualState(sessionId, existingVariant.image_id, cue);
+        const exact = completedVariants.find((v) => v.expression === normalizedExpr);
+        if (exact?.image_id) {
+          updateSceneVisualState(sessionId, exact.image_id, cue);
           return;
         }
 
-        // Budget check at 80%: skip expression pre-gen if over threshold
+        // 2) fallback: 似た表情があれば再利用 (blush↔embarrassed, angry↔annoyed など)
+        if (normalizedExpr) {
+          const { fallbackForExpression } = await import("@/lib/ai/image/visualPromptBuilder");
+          const available = completedVariants
+            .map((v) => v.expression)
+            .filter((e): e is ExpressionType => Boolean(e));
+          const fallback = fallbackForExpression(normalizedExpr, available);
+          if (fallback) {
+            const fallbackVariant = completedVariants.find((v) => v.expression === fallback);
+            if (fallbackVariant?.image_id) {
+              updateSceneVisualState(sessionId, fallbackVariant.image_id, cue);
+              return;
+            }
+          }
+        }
+
+        // 3) 既存variantがなければ、80%超で打ち切り
         if (imageSpentJpy >= monthlyBudget * 0.8 && !cue.eventCg) return;
 
-        // Generate expression variant using same bundle's base image as reference
+        // 4) 表情差分jobを生成
         void generateSceneBackground(sessionId, { ...cue, sceneKey }, existingBundle.id);
         return;
       }
@@ -1538,20 +1555,73 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       const bundle = getBundle(session.scenario_id);
       if (!bundle) return;
 
-      const sceneKey = cue.sceneKey ?? "default_scene";
-      const isEventCg = cue.eventCg;
+      // 1) DB状態を信頼源にしてvisualCueを解決
+      const sessionCharStates = state.sessionCharacterStates.filter((s) => s.session_id === sessionId);
+      const environment = state.sessionEnvironmentStates.find((e) => e.session_id === sessionId) ?? null;
+      const resolved = resolveVisualState({
+        cue,
+        environment,
+        characterStates: sessionCharStates,
+        characters: bundle.characters,
+        availableExpressions: state.sceneVisualVariants
+          .filter((v) => v.generation_status === "completed" && v.expression && v.bundle_id === existingBundleId)
+          .map((v) => v.expression!)
+      });
+
+      const sceneKey = resolved.sceneKey;
+      const isEventCg = resolved.eventCg;
       const imageKind: GeneratedImage["image_kind"] = isEventCg
         ? "event_cg"
         : cue.updateType === "expression_variant"
           ? "expression_variant"
           : "background";
-      const quality: ImageQualityPreset = isEventCg
+
+      // 2) 品質preset: 設定×予算で自動ダウングレード
+      const desiredQuality: ImageQualityPreset = isEventCg
         ? (state.settings.event_cg_quality || "high")
         : cue.updateType === "expression_variant"
           ? (state.settings.expression_variant_quality || "draft")
           : (state.settings.base_image_quality || "standard");
+      const imageSpentJpy = state.usageLogs
+        .filter((l) => l.kind === "image")
+        .reduce((sum, l) => sum + l.estimated_cost_jpy, 0);
+      const monthlyBudget = state.settings.image_monthly_budget_jpy || 1400;
+      const quality: ImageQualityPreset = downgradeQualityForBudget(desiredQuality, imageSpentJpy, monthlyBudget);
 
-      const prompt = buildSceneBackgroundPrompt(cue, bundle, state.sessionCharacterStates.filter((s) => s.session_id === sessionId));
+      // 3) 過去の同じシーンの直近summary（連続性ヒント）
+      const previousBundle = state.sceneVisualBundles.find((b) => b.session_id === sessionId && b.scene_key === sceneKey);
+      const previousImage = previousBundle?.base_image_id
+        ? state.images.find((img) => img.id === previousBundle.base_image_id)
+        : undefined;
+
+      // 4) 新Visual Prompt Builderでpositive/negative/summaryを生成
+      const built = buildPromptFromResolved({
+        resolved,
+        imageKind,
+        qualityPreset: quality,
+        visualStyle: pickVisualStyle(bundle.style?.prose_style),
+        nsfwAllowed: state.settings.adult_confirmed && state.settings.nsfw_image_enabled && session.nsfw_image_enabled,
+        previousImagePromptSummary: previousImage?.prompt_summary ?? null
+      });
+      const prompt = built.positivePrompt;
+      const negativePrompt = built.negativePrompt;
+      const builtPromptSummary = built.promptSummary;
+      const consistencyKey = built.consistencyKey;
+
+      // 5) Debug log: ズレた時に追えるよう、生成前にすべて出す
+      console.info("[scene_visual] generate", {
+        sessionId,
+        sceneKey,
+        location: resolved.location,
+        activeCharacters: resolved.activeCharacters.map((c) => c.name),
+        characterOutfits: Object.fromEntries(resolved.activeCharacters.map((c) => [c.name, c.outfit ?? ""])),
+        expression: resolved.activeCharacters.map((c) => c.expression ?? null),
+        imageKind,
+        quality,
+        consistencyKey,
+        promptSummary: builtPromptSummary,
+        diagnostics: resolved.diagnostics
+      });
 
       const resolvedBundleId = existingBundleId ?? null;
       const bundleId = resolvedBundleId ?? newId("svbundle");
@@ -1611,6 +1681,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             prompt,
+            negativePrompt,
             sessionId,
             scenarioId: session.scenario_id,
             triggerType: "major_event",
@@ -1624,7 +1695,11 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
             nsfwImageProvider: state.settings.nsfw_image_provider,
             nsfwImageModel: state.settings.nsfw_image_model,
             quality,
-            size: "portrait"
+            size: "portrait",
+            imageKind,
+            sceneKey,
+            promptSummary: builtPromptSummary,
+            consistencyKey
           })
         });
 
@@ -1639,6 +1714,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
           promptSummary: string;
           isNsfw: boolean;
           blurByDefault: boolean;
+          latencyMs?: number;
           usage: { backend: string; provider: string; model: string; image_count: number; estimated_cost_jpy: number };
         };
 
@@ -1655,13 +1731,16 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
           storage_path: stored.storage_path,
           is_nsfw: result.isNsfw,
           blur_by_default: false,
-          prompt_summary: result.promptSummary,
+          prompt_summary: builtPromptSummary || result.promptSummary,
           image_kind: imageKind,
           scene_key: sceneKey,
           bundle_id: bundleId,
           variant_type: variantType,
           expression: cue.expression,
           quality_preset: quality,
+          continuity_group_id: consistencyKey,
+          cost_estimated_jpy: result.usage.estimated_cost_jpy,
+          latency_ms: result.latencyMs ?? null,
           created_at: nowIso()
         };
 
@@ -1676,8 +1755,22 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
           output_tokens: 0,
           image_count: result.usage.image_count,
           estimated_cost_jpy: result.usage.estimated_cost_jpy,
+          latency_ms: result.latencyMs ?? null,
           quality_preset: quality,
-          meta: { imageKind, sceneKey, bundleId, variantType },
+          meta: {
+            imageKind,
+            sceneKey,
+            bundleId,
+            variantType,
+            location: resolved.location,
+            activeCharacters: resolved.activeCharacters.map((c) => c.name),
+            characterOutfits: Object.fromEntries(resolved.activeCharacters.map((c) => [c.name, c.outfit ?? ""])),
+            expression: resolved.activeCharacters[0]?.expression ?? null,
+            consistencyKey,
+            promptSummary: builtPromptSummary,
+            negativePromptSummary: negativePrompt.slice(0, 200),
+            diagnostics: resolved.diagnostics
+          },
           created_at: nowIso()
         };
 
@@ -3996,59 +4089,38 @@ function normalizeExpression(expr: ExpressionType | null | undefined): Expressio
   return map[expr] ?? expr as ExpressionType;
 }
 
-function buildSceneBackgroundPrompt(
-  cue: VisualCue,
-  bundle: StoryBundle,
-  characterStates: SessionCharacterState[]
-): string {
-  const parts: string[] = [];
-
-  parts.push("coherent visual novel anime background, single consistent scene, no random extra characters");
-
-  // POV and camera
-  const povLabel = cue.pov === "first_person" ? "first-person POV" : "third-person view";
-  const distanceLabel = cue.cameraDistance === "close" ? "close-up" : cue.cameraDistance === "wide" ? "wide shot" : "medium shot";
-  parts.push(`${povLabel}, ${distanceLabel}`);
-
-  // Location / atmosphere
-  parts.push(`scenario: ${bundle.scenario.title}`);
-  if (bundle.scenario.world_setting) parts.push(`world setting: ${shortenForPrompt(bundle.scenario.world_setting, 180)}`);
-  if (bundle.scenario.relationship_setup) parts.push(`relationship mood: ${shortenForPrompt(bundle.scenario.relationship_setup, 140)}`);
-  if (cue.location) parts.push(`scene: ${cue.location}`);
-  if (cue.timeOfDay) parts.push(cue.timeOfDay);
-  if (cue.weather) parts.push(cue.weather);
-
-  // Active characters
-  if (cue.activeCharacters.length > 0) {
-    const characterDescs = cue.activeCharacters.map((name) => {
-      const character = bundle.characters.find((c) => c.name === name);
-      const state = characterStates.find((s) => bundle.characters.find((c) => c.id === s.character_id)?.name === name);
-      const parts: string[] = [name];
-      if (character?.appearance) parts.push(character.appearance);
-      if (state?.outfit) parts.push(`wearing ${state.outfit}`);
-      if (cue.expression) parts.push(`expression: ${cue.expression}`);
-      if (cue.pose) parts.push(`pose: ${cue.pose}`);
-      return parts.join(", ");
-    });
-    parts.push(`characters: ${characterDescs.join("; ")}`);
-  }
-
-  // Style hints from scenario prose style
-  if (bundle.style.prose_style) parts.push(`style: ${bundle.style.prose_style}`);
-
-  // AI-provided prompt summary
-  if (cue.promptSummary) parts.push(`current story beat: ${shortenForPrompt(cue.promptSummary, 220)}`);
-
-  // Quality markers
-  parts.push("match the current story context, no text, no subtitles, no speech bubbles, no logos, no watermark");
-  parts.push("detailed illustration, clean composition, high quality");
-
-  return parts.filter(Boolean).join(", ");
+function pickVisualStyle(proseStyle?: string | null): VisualStyle {
+  const text = (proseStyle ?? "").toLowerCase();
+  if (!text) return "visual_novel";
+  if (text.includes("dark") || text.includes("ホラー") || text.includes("シリアス")) return "dark";
+  if (text.includes("romance") || text.includes("恋愛")) return "romance";
+  if (text.includes("fantasy") || text.includes("ファンタジー")) return "fantasy";
+  if (text.includes("adventure") || text.includes("冒険") || text.includes("バトル")) return "adventure";
+  if (text.includes("anime")) return "anime";
+  return "visual_novel";
 }
 
-function shortenForPrompt(value: string | null | undefined, maxLength: number) {
-  const text = (value ?? "").trim();
-  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+/**
+ * 画像予算の消費に応じて、自動的に画像品質preset を一段階下げる。
+ * 50% → そのまま / 70% → high→standard, ultra→high / 80%↑ → standard→draft 含めて全部一段下げ
+ */
+function downgradeQualityForBudget(
+  desired: ImageQualityPreset,
+  spentJpy: number,
+  budgetJpy: number
+): ImageQualityPreset {
+  if (budgetJpy <= 0) return desired;
+  const ratio = spentJpy / budgetJpy;
+  if (ratio < 0.7) return desired;
+  const order: ImageQualityPreset[] = ["draft", "standard", "high", "ultra"];
+  const idx = order.indexOf(desired);
+  if (idx <= 0) return desired;
+  if (ratio < 0.8) {
+    // high→standard, ultra→high
+    return idx >= 2 ? order[idx - 1] : desired;
+  }
+  // 80%以上: 全部一段ダウン
+  return order[idx - 1];
 }
 
 function trackChoiceSelection(
