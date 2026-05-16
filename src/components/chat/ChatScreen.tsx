@@ -751,6 +751,22 @@ export function ChatScreen({ sessionId }: { sessionId: string }) {
           onContinue={handleContinue}
           onGenerateImage={(kind) => void requestImage(kind)}
         />
+        {showBottomActions && currentSmartReplies.length > 0 && !busy && !draft && (
+          <div className="max-h-[30dvh] overflow-y-auto overscroll-contain border-t border-white/[0.04] bg-[#0e1015] px-3 pb-[calc(env(safe-area-inset-bottom)+4px)] pt-2">
+            <div className="grid gap-2">
+              {currentSmartReplies.map((reply) => (
+                <button
+                  key={reply.id}
+                  type="button"
+                  onClick={() => void submit(reply.label)}
+                  className="rounded-xl bg-[#1a1d28] px-4 py-3 text-left text-[14px] leading-6 text-ink/80 ring-1 ring-white/[0.06] transition-colors active:bg-[#22263a] [overflow-wrap:anywhere]"
+                >
+                  {reply.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </main>
     </>
