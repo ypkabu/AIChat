@@ -181,6 +181,8 @@ export type BuildFromResolvedOptions = {
   visualStyle?: VisualStyle;
   nsfwAllowed?: boolean;
   previousImagePromptSummary?: string | null;
+  /** OpenAI等の自然言語モデル用プロンプトを使うか */
+  useNaturalLanguagePrompt?: boolean;
 };
 
 export function buildPromptFromResolved(opts: BuildFromResolvedOptions): BuiltVisualPrompt {
@@ -197,7 +199,8 @@ export function buildPromptFromResolved(opts: BuildFromResolvedOptions): BuiltVi
     imageKind: opts.imageKind,
     qualityPreset: opts.qualityPreset,
     nsfwAllowed: opts.nsfwAllowed,
-    previousImagePromptSummary: opts.previousImagePromptSummary ?? null
+    previousImagePromptSummary: opts.previousImagePromptSummary ?? null,
+    useNaturalLanguagePrompt: opts.useNaturalLanguagePrompt
   };
   return buildVisualPrompt(input);
 }

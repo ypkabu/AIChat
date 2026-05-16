@@ -1654,13 +1654,17 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         : undefined;
 
       // 4) 新Visual Prompt Builderでpositive/negative/summaryを生成
+      // OpenAI (gpt-image-1/dall-e-3) の場合は自然言語プロンプトを使用
+      const imageProvider = state.settings.standard_image_provider?.toLowerCase() ?? "";
+      const isNaturalLangModel = imageProvider === "openai" || imageProvider.startsWith("openai:");
       const built = buildPromptFromResolved({
         resolved,
         imageKind,
         qualityPreset: quality,
         visualStyle: pickVisualStyle(bundle.style?.prose_style),
         nsfwAllowed: state.settings.adult_confirmed && state.settings.nsfw_image_enabled && session.nsfw_image_enabled,
-        previousImagePromptSummary: previousImage?.prompt_summary ?? null
+        previousImagePromptSummary: previousImage?.prompt_summary ?? null,
+        useNaturalLanguagePrompt: isNaturalLangModel
       });
       const prompt = built.positivePrompt;
       const negativePrompt = built.negativePrompt;

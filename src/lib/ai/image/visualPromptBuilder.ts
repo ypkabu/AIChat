@@ -51,6 +51,8 @@ export type BuildVisualPromptInput = {
   qualityPreset: ImageQualityPreset;
   nsfwAllowed?: boolean;
   previousImagePromptSummary?: string | null;
+  /** OpenAI (gpt-image-1/dall-e-3) のような自然言語モデル用に最適化するか */
+  useNaturalLanguagePrompt?: boolean;
 };
 
 export type BuiltVisualPrompt = {
@@ -245,29 +247,176 @@ function describeCharacter(char: VisualActiveCharacter): string {
 }
 
 /**
+ * 自然言語モデル (gpt-image-1, dall-e-3) 用のプロンプトを生成。
+ * タグベースではなく、「絵の注文書」のような自然な指示文を組み立てる。
+ * キャラの外見描写を具体的に入れることで一貫性を向上させる。
+ */
+function buildNaturalLanguagePrompt(input: BuildVisualPromptInput): string {
+  const parts: string[] = [];
+
+  // 1. 画風指定（先頭で画風を確定させる）
+  const styleDesc: Record<VisualStyle, string> = {
+    anime: "Japanese anime illustration style with clean lines and soft cel-shading",
+    visual_novel: "Japanese visual novel CG illustration, clean anime art style with detailed backgrounds",
+    fantasy: "Fantasy anime illustration with painterly backgrounds and soft magical glow",
+    romance: "Romantic anime illustration with warm soft palette and gentle atmosphere",
+    adventure: "Dynamic adventure anime illustration with vivid colors",
+    dark: "Dark moody anime illustration with cinematic lighting"
+  };
+  parts.push(styleDesc[input.visualStyle] ?? styleDesc.visual_novel);
+
+  // 2. 構図と視点
+  parts.push(`First-person point-of-view shot (the viewer is looking at the scene through their own eyes — the viewer's body must NOT appear in the image).`);
+  const camDesc: Record<CameraDistance, string> = {
+    close: "Close-up framing, showing only face and upper chest",
+    medium: "Medium shot, showing waist up",
+    far: "Full-body shot showing the entire figure",
+    wide: "Wide establishing shot showing the character and surrounding environment"
+  };
+  parts.push(camDesc[input.cameraDistance] ?? camDesc.medium);
+
+  // 3. シーン（場所・時間・天候・状況）— 最も重要な情報
+  const sceneParts: string[] = [];
+  if (input.location) {
+    sceneParts.push(`Location: ${sanitizeProtagonistMentions(shorten(input.location, 80))}`);
+  }
+  if (input.timeOfDay) {
+    sceneParts.push(`Time: ${sanitizeProtagonistMentions(shorten(input.timeOfDay, 40))}`);
+  }
+  if (input.weather) {
+    sceneParts.push(`Weather: ${sanitizeProtagonistMentions(shorten(input.weather, 40))}`);
+  }
+  if (input.sceneSummary) {
+    const cleaned = sanitizeProtagonistMentions(shorten(input.sceneSummary, 200));
+    if (cleaned) sceneParts.push(`Current scene: ${cleaned}`);
+  }
+  if (sceneParts.length > 0) {
+    parts.push(sceneParts.join(". "));
+  }
+
+  // 4. キャラクター — 外見を具体的に記述（一貫性の要）
+  const char = input.activeCharacters[0];
+  if (char) {
+    const charParts: string[] = [];
+    charParts.push(`In the frame: a single female character named ${char.name}`);
+    if (char.appearance) {
+      // 外見は一貫性のためにフルで入れる（切り詰めない）
+      charParts.push(`Appearance: ${shorten(char.appearance, 250)}`);
+    }
+    if (char.outfit) {
+      charParts.push(`Currently wearing: ${shorten(char.outfit, 120)}`);
+    }
+    if (char.expression) {
+      const expr = normalizeExpression(String(char.expression)) ?? String(char.expression);
+      charParts.push(`Facial expression: ${expr}`);
+    }
+    if (char.pose) {
+      charParts.push(`Pose: ${shorten(char.pose, 80)}`);
+    }
+    if (char.mood) {
+      charParts.push(`Mood: ${shorten(char.mood, 50)}`);
+    }
+    parts.push(charParts.join(". "));
+    parts.push(`Only ${char.name} appears in the image — no other characters, no male figures.`);
+  } else {
+    parts.push("The frame shows only the empty scene — no characters visible.");
+  }
+
+  // 5. 画像種別ごとの指示
+  if (input.imageKind === "expression_variant") {
+    parts.push("This is an expression update: keep the same outfit and lighting as before, but change the facial expression and body language to match the current narrative moment.");
+  } else if (input.imageKind === "event_cg") {
+    parts.push("This is a dramatic key visual for an important story moment. Use dramatic composition, emotional lighting, and polished color grading.");
+  } else if (input.imageKind === "manual_scene") {
+    parts.push("Illustrate this scene exactly as described.");
+  }
+
+  // 6. 連続性ヒント
+  if (input.previousImagePromptSummary) {
+    const cleaned = sanitizeProtagonistMentions(shorten(input.previousImagePromptSummary, 150));
+    if (cleaned) parts.push(`For visual continuity, the previous image showed: ${cleaned}`);
+  }
+
+  // 7. 品質と制約
+  parts.push("No text, no speech bubbles, no subtitles, no watermarks, no logos in the image.");
+
+  return parts.join("\n\n");
+}
+
+/**
  * Visual Prompt Builderのメインエントリ。
  *
- * - 必ず first-person POV を強制し、主人公を画像に映さないよう指示
- * - Negative promptに主人公混入除外・構図ズレ除外を必ず入れる
- * - imageKind / qualityPreset で品質タグを切り替える
- * - 主要キャラの服装・表情・ポーズは「解決済みのシーン状態」から渡されたものを信頼する
+ * useNaturalLanguagePrompt が true の場合（OpenAI等）:
+ *   - 自然言語の詳細な指示文を生成（タグ不要）
+ *   - negative prompt は短め（gpt-image-1 は正式にはサポートしないため）
+ *
+ * false の場合（Flux/SD/Illustrious等）:
+ *   - 従来のタグベースプロンプト
+ *   - POV/SOLO ロック付き
+ *   - 詳細な negative prompt
  */
 export function buildVisualPrompt(input: BuildVisualPromptInput): BuiltVisualPrompt {
+  const useNatural = input.useNaturalLanguagePrompt ?? false;
+
+  // プロンプト要約 (DB保存用) — 共通
+  const summary = [
+    `kind=${input.imageKind}`,
+    `scene=${input.sceneKey}`,
+    `loc=${shorten(input.location, 30)}`,
+    input.timeOfDay ? `time=${input.timeOfDay}` : null,
+    `chars=${input.activeCharacters.map((c) => c.name).join("|") || "none"}`,
+    `expr=${
+      input.activeCharacters
+        .map((c) => normalizeExpression(c.expression ? String(c.expression) : null) ?? "")
+        .filter(Boolean)
+        .join("|") || "n/a"
+    }`,
+    `cam=${input.cameraDistance}`,
+    `q=${input.qualityPreset}`
+  ]
+    .filter(Boolean)
+    .join("; ");
+
+  // 一貫性キー — 共通
+  const consistencyKey = [
+    input.sceneKey,
+    input.location,
+    input.activeCharacters
+      .map((c) => `${c.id}:${(c.outfit || "").slice(0, 32)}`)
+      .sort()
+      .join("/"),
+    input.cameraDistance
+  ].join("|");
+
+  if (useNatural) {
+    // 自然言語モデル用（OpenAI gpt-image-1 / dall-e-3）
+    const positivePrompt = buildNaturalLanguagePrompt(input);
+    // gpt-image-1 は negative prompt を公式にはサポートしないが、
+    // アダプター側で「避けるべきもの」として positive に追記する
+    const negParts = ["male character", "multiple people", "text", "watermark", "logo"];
+    if (!input.nsfwAllowed) negParts.unshift("nsfw", "nude", "explicit");
+    const negativePrompt = negParts.join(", ");
+
+    return { positivePrompt, negativePrompt, promptSummary: summary, consistencyKey };
+  }
+
+  // ---- 以下、Flux/SD/Illustrious 用のタグベースプロンプト ----
+
   // 1. 画風
   const styleTag = STYLE_TAGS[input.visualStyle] ?? STYLE_TAGS.visual_novel;
   const qualityTag = QUALITY_PRESET_TAGS[input.qualityPreset] ?? QUALITY_PRESET_TAGS.standard;
 
-  // 2. POV強制 — Flux系では prompt先頭の自然文が最も効くので、ここを最優先
+  // 2. POV強制
   const povLockSentence = `${POV_LOCK_EN}. ${POV_LOCK_JA}.`;
 
-  // 3. キャラクター（POVの直後に置く。「キャラはこの1人だけ」を強く宣言）
+  // 3. キャラクター
   const characterTokens = input.activeCharacters.slice(0, 1).map(describeCharacter).filter(Boolean);
   const heroineName = input.activeCharacters[0]?.name ?? null;
   const characterBlock = characterTokens.length
     ? `in the frame there is only ${characterTokens.join("; ")}, ${heroineName ? `${heroineName} is positioned directly in front of the camera as if facing the viewer's eyes` : "she is positioned directly in front of the camera"}`
     : "the frame shows only the empty scene as seen from the viewer's eyes, no characters in the foreground";
 
-  // 4. シーンコンテクスト（主人公への言及を除去してから入れる）
+  // 4. シーンコンテクスト
   const sceneTokens: string[] = [];
   if (input.location) sceneTokens.push(`the setting is ${sanitizeProtagonistMentions(shorten(input.location, 60))}`);
   if (input.timeOfDay) sceneTokens.push(`time of day: ${sanitizeProtagonistMentions(shorten(input.timeOfDay, 30))}`);
@@ -283,27 +432,19 @@ export function buildVisualPrompt(input: BuildVisualPromptInput): BuiltVisualPro
   // 6. imageKindに応じた追加指示
   const kindHints: string[] = [];
   if (input.imageKind === "expression_variant") {
-    // 服装と画風は固定するが、表情とポーズは「現在のナラティブ」に従って変化させる。
-    // 完全固定にすると、文章で「歩き出す/顔を逸らす」と書いてあるのに
-    // 画像は中立のまま固まり、見ているシーンと乖離する。
-    kindHints.push(
-      "keep the same outfit and the same overall lighting, but adapt the facial expression and pose to match the current narrative beat"
-    );
+    kindHints.push("keep the same outfit and the same overall lighting, but adapt the facial expression and pose to match the current narrative beat");
   } else if (input.imageKind === "event_cg") {
     kindHints.push("event CG, dramatic composition, key visual moment, polished color grading");
   } else if (input.imageKind === "manual_scene") {
     kindHints.push("manually requested scene illustration, faithful to the described state");
   }
 
-  // 7. 連続性 / 過去サマリ（主人公への言及を除去）
+  // 7. 連続性
   if (input.previousImagePromptSummary) {
     const cleaned = sanitizeProtagonistMentions(shorten(input.previousImagePromptSummary, 120));
     if (cleaned) kindHints.push(`maintain visual continuity with previous frame: ${cleaned}`);
   }
 
-  // Positive prompt の順序:
-  //   POV → SOLO → キャラ → 構図 → シーン → kindHints → 画風 → 品質 → サニタイズ
-  // 先頭ほどモデルの注意が強いので、POVと単独構図が必ず先頭に来るようにする。
   const positiveParts: string[] = [
     povLockSentence,
     SOLO_SUBJECT_LOCK,
@@ -324,40 +465,5 @@ export function buildVisualPrompt(input: BuildVisualPromptInput): BuiltVisualPro
     ? baseNegative
     : `nsfw, nude, explicit, ${baseNegative}`;
 
-  // 9. プロンプト要約 (DB保存用)
-  const summary = [
-    `kind=${input.imageKind}`,
-    `scene=${input.sceneKey}`,
-    `loc=${shorten(input.location, 30)}`,
-    input.timeOfDay ? `time=${input.timeOfDay}` : null,
-    `chars=${input.activeCharacters.map((c) => c.name).join("|") || "none"}`,
-    `expr=${
-      input.activeCharacters
-        .map((c) => normalizeExpression(c.expression ? String(c.expression) : null) ?? "")
-        .filter(Boolean)
-        .join("|") || "n/a"
-    }`,
-    `cam=${input.cameraDistance}`,
-    `q=${input.qualityPreset}`
-  ]
-    .filter(Boolean)
-    .join("; ");
-
-  // 10. 一貫性キー: シーン × アクティブキャラ × 服装 × カメラ距離（表情とimageKindは外す）
-  const consistencyKey = [
-    input.sceneKey,
-    input.location,
-    input.activeCharacters
-      .map((c) => `${c.id}:${(c.outfit || "").slice(0, 32)}`)
-      .sort()
-      .join("/"),
-    input.cameraDistance
-  ].join("|");
-
-  return {
-    positivePrompt,
-    negativePrompt,
-    promptSummary: summary,
-    consistencyKey
-  };
+  return { positivePrompt, negativePrompt, promptSummary: summary, consistencyKey };
 }
