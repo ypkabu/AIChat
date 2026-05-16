@@ -69,16 +69,31 @@ const STYLE_TAGS: Record<VisualStyle, string> = {
   dark: "dark anime illustration, moody lighting, cinematic atmosphere"
 };
 
-// First-person POVを必ず強制する不変文（日本語＋英語）
+// First-person POV を最強で強制する文。
+// Flux系モデルはnegative promptをほぼ無視するため、positive prompt先頭で
+// 「カメラ＝視聴者の目」「フレームにはヒロインしかいない」を自然文で宣言する。
 const POV_LOCK_EN =
-  "first-person POV from the protagonist's eyes, the protagonist is not visible in the image, no protagonist body, no protagonist face, no protagonist hands, no protagonist arms, no protagonist legs, no protagonist back view, no protagonist shadow, no protagonist reflection";
+  "first-person POV shot, the camera is exactly the viewer's own eyes, the viewer is standing in the scene but cannot be seen, the frame shows what the viewer's eyes see, nothing of the viewer's own body is rendered, no male character in this image, no male body, no male torso, no boy in the foreground, no second person in the frame";
 const POV_LOCK_JA =
-  "主人公の一人称視点、主人公の目線から見た場面、主人公本人は画像に映さない、主人公の顔・体・手・腕・脚・後ろ姿・影・反射は描かない";
+  "一人称視点のショット、カメラは視聴者自身の目、視聴者は場面の中に立っているが画面には映らない、視聴者の体の一部も描かれない、男性キャラは一切描かない";
 
-// Negative promptの不変部分（主人公混入の除外 / 構図ズレ除外）
+// 「単独構図」を肯定形で宣言（Fluxは肯定的指示の方がよく効く）
+const SOLO_SUBJECT_LOCK =
+  "solo female character composition, only one person visible in the entire frame, single subject illustration, the female character occupies the visible foreground alone, empty space where the viewer is standing";
+
+// Negative promptは SD/Illustrious 系のみ効くが、保険として強く入れる
 const PROTAGONIST_NEG_EN = [
-  "protagonist",
+  "male character",
+  "boy",
+  "man",
   "male protagonist",
+  "male torso",
+  "male back",
+  "two people",
+  "couple",
+  "boyfriend",
+  "back of head",
+  "back view of a person in the foreground",
   "viewer body",
   "viewer hands",
   "viewer arms",
@@ -183,18 +198,49 @@ function shorten(text: string | null | undefined, max: number) {
   return trimmed.length > max ? `${trimmed.slice(0, max)}...` : trimmed;
 }
 
+/**
+ * 主人公への言及（ユーザー/彼/僕/俺/{{user}}など）を除去する。
+ * sceneSummary や recent_event には会話AIが「ユーザーがXXした」と書きがちで、
+ * Flux はそれを literal に解釈して男性を描いてしまうので、prompt送信前に必ず通す。
+ */
+function sanitizeProtagonistMentions(text: string): string {
+  if (!text) return "";
+  let out = text;
+  const patterns: Array<[RegExp, string]> = [
+    // 日本語
+    [/\{\{user\}\}/gi, "she"],
+    [/ユーザー(さん|くん|君|様)?/g, ""],
+    [/主人公/g, ""],
+    [/プレイヤー/g, ""],
+    [/(?:^|\s|、|。)彼(?:は|が|の|を|に|と)/g, " "],
+    [/(?:^|\s|、|。)僕(?:は|が|の|を|に|と)/g, " "],
+    [/(?:^|\s|、|。)俺(?:は|が|の|を|に|と)/g, " "],
+    // 英語
+    [/\b(the user|user|protagonist|player|the viewer|viewer)\b/gi, ""],
+    [/\b(he|him|his)\b/gi, ""],
+    [/\b(the boy|the man|boyfriend)\b/gi, ""]
+  ];
+  for (const [re, rep] of patterns) {
+    out = out.replace(re, rep);
+  }
+  // 連続空白とゴミの後始末
+  return out.replace(/[、,]\s*[、,]/g, "、").replace(/\s+/g, " ").trim();
+}
+
 function describeCharacter(char: VisualActiveCharacter): string {
+  // Fluxは自然文の方が反応が良いので、She/Her の3人称ナレーション形式に揃える
   const parts: string[] = [];
-  parts.push(char.name);
-  if (char.appearance) parts.push(shorten(char.appearance, 140));
-  if (char.outfit) parts.push(`wearing ${shorten(char.outfit, 80)}`);
+  parts.push(`a single female character named ${char.name}`);
+  if (char.appearance) parts.push(`she has ${shorten(char.appearance, 140)}`);
+  if (char.outfit) parts.push(`she is wearing ${shorten(char.outfit, 80)}`);
   if (char.expression) {
     const expr = normalizeExpression(String(char.expression)) ?? String(char.expression);
-    parts.push(`expression: ${expr}`);
+    parts.push(`her expression is ${expr}`);
   }
-  if (char.pose) parts.push(`pose: ${shorten(char.pose, 60)}`);
-  if (char.mood) parts.push(`mood: ${shorten(char.mood, 50)}`);
-  if (char.relationshipToUser) parts.push(`relationship to viewer: ${shorten(char.relationshipToUser, 40)}`);
+  if (char.pose) parts.push(`her pose: ${shorten(char.pose, 60)}`);
+  if (char.mood) parts.push(`her mood: ${shorten(char.mood, 50)}`);
+  // relationshipToUser は「viewer」「user」「protagonist」を含みやすく、
+  // Flux に余計な人物を呼び込むので promptには出さない（DBには残す）
   return parts.filter(Boolean).join(", ");
 }
 
@@ -211,21 +257,25 @@ export function buildVisualPrompt(input: BuildVisualPromptInput): BuiltVisualPro
   const styleTag = STYLE_TAGS[input.visualStyle] ?? STYLE_TAGS.visual_novel;
   const qualityTag = QUALITY_PRESET_TAGS[input.qualityPreset] ?? QUALITY_PRESET_TAGS.standard;
 
-  // 2. POV強制
-  const povLock = `${POV_LOCK_EN}. ${POV_LOCK_JA}`;
+  // 2. POV強制 — Flux系では prompt先頭の自然文が最も効くので、ここを最優先
+  const povLockSentence = `${POV_LOCK_EN}. ${POV_LOCK_JA}.`;
 
-  // 3. シーンコンテクスト
-  const sceneTokens: string[] = [];
-  if (input.location) sceneTokens.push(`location: ${shorten(input.location, 60)}`);
-  if (input.timeOfDay) sceneTokens.push(`time: ${shorten(input.timeOfDay, 30)}`);
-  if (input.weather) sceneTokens.push(`weather: ${shorten(input.weather, 30)}`);
-  if (input.sceneSummary) sceneTokens.push(`scene: ${shorten(input.sceneSummary, 160)}`);
-
-  // 4. キャラクター
-  const characterTokens = input.activeCharacters.map(describeCharacter).filter(Boolean);
+  // 3. キャラクター（POVの直後に置く。「キャラはこの1人だけ」を強く宣言）
+  const characterTokens = input.activeCharacters.slice(0, 1).map(describeCharacter).filter(Boolean);
+  const heroineName = input.activeCharacters[0]?.name ?? null;
   const characterBlock = characterTokens.length
-    ? `characters in front of the viewer: ${characterTokens.join("; ")}`
-    : "no character visible in this shot, only the scene as seen from the viewer";
+    ? `in the frame there is only ${characterTokens.join("; ")}, ${heroineName ? `${heroineName} is positioned directly in front of the camera as if facing the viewer's eyes` : "she is positioned directly in front of the camera"}`
+    : "the frame shows only the empty scene as seen from the viewer's eyes, no characters in the foreground";
+
+  // 4. シーンコンテクスト（主人公への言及を除去してから入れる）
+  const sceneTokens: string[] = [];
+  if (input.location) sceneTokens.push(`the setting is ${sanitizeProtagonistMentions(shorten(input.location, 60))}`);
+  if (input.timeOfDay) sceneTokens.push(`time of day: ${sanitizeProtagonistMentions(shorten(input.timeOfDay, 30))}`);
+  if (input.weather) sceneTokens.push(`weather: ${sanitizeProtagonistMentions(shorten(input.weather, 30))}`);
+  if (input.sceneSummary) {
+    const cleaned = sanitizeProtagonistMentions(shorten(input.sceneSummary, 160));
+    if (cleaned) sceneTokens.push(`current beat: ${cleaned}`);
+  }
 
   // 5. 構図
   const composition = cameraTag(input.cameraDistance);
@@ -242,23 +292,28 @@ export function buildVisualPrompt(input: BuildVisualPromptInput): BuiltVisualPro
     kindHints.push("manually requested scene illustration, faithful to the described state");
   }
 
-  // 7. 連続性 / 過去サマリ
+  // 7. 連続性 / 過去サマリ（主人公への言及を除去）
   if (input.previousImagePromptSummary) {
-    kindHints.push(`maintain visual continuity with previous frame: ${shorten(input.previousImagePromptSummary, 120)}`);
+    const cleaned = sanitizeProtagonistMentions(shorten(input.previousImagePromptSummary, 120));
+    if (cleaned) kindHints.push(`maintain visual continuity with previous frame: ${cleaned}`);
   }
 
+  // Positive prompt の順序:
+  //   POV → SOLO → キャラ → 構図 → シーン → kindHints → 画風 → 品質 → サニタイズ
+  // 先頭ほどモデルの注意が強いので、POVと単独構図が必ず先頭に来るようにする。
   const positiveParts: string[] = [
-    styleTag,
-    povLock,
-    sceneTokens.join(", "),
+    povLockSentence,
+    SOLO_SUBJECT_LOCK,
     characterBlock,
     composition,
+    sceneTokens.join(", "),
     kindHints.join(", "),
+    styleTag,
     qualityTag,
     "no text, no subtitles, no speech bubble, no logo, no watermark"
   ].filter((part) => part && part.length > 0);
 
-  const positivePrompt = positiveParts.join(", ");
+  const positivePrompt = positiveParts.join(". ");
 
   // 8. Negative Prompt
   const baseNegative = `${PROTAGONIST_NEG_EN}, ${QUALITY_NEG}`;
