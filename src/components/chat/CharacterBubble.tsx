@@ -15,26 +15,27 @@ export function CharacterBubble({
   onGenerateVoice?: (() => void) | null;
 }) {
   const content = displayContent(message.content);
-  const lines = content.split(/\n+/).map((line) => line.trim()).filter(Boolean);
-  const hasQuotedLine = lines.some(isDialogueLine);
+  const segments = parseSegments(content);
 
   return (
-    <div className="flex items-end gap-2 pr-10">
-      <Avatar name={message.speaker_name} src={message.speaker_avatar_url} color={color} />
-      <div className="min-w-0">
-        <p className="mb-1 px-1 text-[11px] text-muted">{message.speaker_name}</p>
-        <div className="max-w-[min(72vw,20rem)] whitespace-pre-line break-words rounded-2xl rounded-bl-sm bg-gradient-to-b from-panel2 to-[#1e2230] px-3.5 py-2.5 text-[15px] leading-6 text-ink shadow-bubble ring-1 ring-white/[0.04] [overflow-wrap:anywhere]">
-          {hasQuotedLine ? (
-            <div className="grid gap-1">
-              {lines.map((line, index) => (
-                <p key={`${message.id}-${index}`} className={isDialogueLine(line) ? "text-ink" : "text-muted italic"}>
-                  {line}
-                </p>
-              ))}
-            </div>
-          ) : (
-            content
-          )}
+    <div className="flex items-start gap-2.5 pr-10">
+      <Avatar name={message.speaker_name} src={message.speaker_avatar_url} color={color} size="sm" />
+      <div className="min-w-0 flex-1">
+        <p className="mb-1 px-0.5 text-[11px] font-medium text-muted">{message.speaker_name}</p>
+        <div className="max-w-[min(78vw,22rem)] whitespace-pre-line break-words rounded-2xl rounded-tl-md bg-[#1c1f2b] px-3.5 py-3 text-[15px] leading-7 text-ink/90 ring-1 ring-white/[0.06] [overflow-wrap:anywhere]">
+          <div className="grid gap-2">
+            {segments.map((seg, i) => (
+              <p
+                key={`${message.id}-seg-${i}`}
+                className={seg.isDialogue
+                  ? "font-medium text-ink"
+                  : "text-[14px] leading-6 text-ink/60"
+                }
+              >
+                {seg.text}
+              </p>
+            ))}
+          </div>
         </div>
         {onGenerateVoice && (
           <VoiceButton voiceJob={voiceJob} onGenerate={onGenerateVoice} />
@@ -44,6 +45,46 @@ export function CharacterBubble({
   );
 }
 
+type Segment = { text: string; isDialogue: boolean };
+
+function parseSegments(content: string): Segment[] {
+  const lines = content.split(/\n+/).map(l => l.trim()).filter(Boolean);
+  if (lines.length === 0) return [{ text: content, isDialogue: false }];
+
+  const segments: Segment[] = [];
+  let currentNarration: string[] = [];
+
+  const flushNarration = () => {
+    if (currentNarration.length > 0) {
+      segments.push({ text: currentNarration.join("\n"), isDialogue: false });
+      currentNarration = [];
+    }
+  };
+
+  for (const line of lines) {
+    if (isDialogueLine(line)) {
+      flushNarration();
+      segments.push({ text: line, isDialogue: true });
+    } else {
+      currentNarration.push(line);
+    }
+  }
+  flushNarration();
+
+  // If no dialogue was found, treat everything as a single narration segment
+  if (segments.length === 0) {
+    return [{ text: content, isDialogue: false }];
+  }
+
+  return segments;
+}
+
 function isDialogueLine(line: string) {
-  return /^「.*」$/.test(line.trim());
+  const trimmed = line.trim();
+  return (
+    /^「.*」$/.test(trimmed) ||
+    /^『.*』$/.test(trimmed) ||
+    /^（.*）$/.test(trimmed) ||
+    /^\(.*\)$/.test(trimmed)
+  );
 }
