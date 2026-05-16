@@ -15,7 +15,8 @@ export function MessageList({
   voiceJobs,
   showAuxiliaryActions = true,
   onGenerateEventImage,
-  onGenerateVoice
+  onGenerateVoice,
+  onSetImageAsBackground
 }: {
   messages: Message[];
   characters: ScenarioCharacter[];
@@ -24,6 +25,7 @@ export function MessageList({
   showAuxiliaryActions?: boolean;
   onGenerateEventImage: (message: Message) => void;
   onGenerateVoice?: ((message: Message, characterId: string | null) => void) | null;
+  onSetImageAsBackground?: (imageId: string) => void;
 }) {
   const displayMessages = expandLooseNdjsonMessages(messages);
   return (
@@ -39,7 +41,7 @@ export function MessageList({
         if (message.message_type === "narration") return <NarrationBlock key={message.id} message={message} />;
         if (message.message_type === "image") {
           const imageId = typeof message.metadata.imageId === "string" ? message.metadata.imageId : "";
-          return <ImageCard key={message.id} image={images.find((image) => image.id === imageId)} />;
+          return <ImageCard key={message.id} image={images.find((image) => image.id === imageId)} onSetAsBackground={imageId && onSetImageAsBackground ? () => onSetImageAsBackground(imageId) : undefined} />;
         }
         if (message.message_type === "event") {
           return <EventMessage key={message.id} message={message} onGenerateImage={showAuxiliaryActions ? () => onGenerateEventImage(message) : undefined} />;

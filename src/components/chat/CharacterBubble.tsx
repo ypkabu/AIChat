@@ -23,7 +23,7 @@ export function CharacterBubble({
       <Avatar name={message.speaker_name} src={message.speaker_avatar_url} color={color} />
       <div className="min-w-0">
         <p className="mb-1 px-1 text-[11px] text-muted">{message.speaker_name}</p>
-        <div className="max-w-[min(72vw,20rem)] whitespace-pre-line break-words rounded-2xl rounded-bl-sm bg-panel2 px-3.5 py-2.5 text-[15px] leading-6 text-ink shadow-sm [overflow-wrap:anywhere]">
+        <div className="max-w-[min(72vw,20rem)] whitespace-pre-line break-words rounded-2xl rounded-bl-sm bg-gradient-to-b from-panel2 to-[#1e2230] px-3.5 py-2.5 text-[15px] leading-6 text-ink shadow-bubble ring-1 ring-white/[0.04] [overflow-wrap:anywhere]">
           {hasQuotedLine ? (
             <div className="grid gap-1">
               {lines.map((line, index) => (

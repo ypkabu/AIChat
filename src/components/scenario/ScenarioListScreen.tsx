@@ -20,12 +20,12 @@ export function ScenarioListScreen() {
   return (
     <main className="app-viewport min-h-dvh bg-canvas pb-32 text-ink">
       <AgeGate />
-      <header className="sticky top-0 z-20 border-b border-white/10 bg-canvas/92 px-4 py-3 backdrop-blur-xl">
+      <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-canvas/90 px-4 py-3 shadow-float backdrop-blur-xl">
         <div className="mx-auto flex max-w-md items-center justify-between gap-3">
           <AppMark />
           <button
             type="button"
-            className="grid min-h-11 min-w-11 place-items-center rounded-md bg-brand text-canvas"
+            className="grid min-h-11 min-w-11 place-items-center rounded-lg bg-gradient-brand text-canvas shadow-glow-sm transition-all duration-150 active:scale-95"
             aria-label="新規シナリオ"
             onClick={() => {
               const id = createScenario();
@@ -42,15 +42,15 @@ export function ScenarioListScreen() {
           <SupabaseAuthPanel />
         </div>
         <div className="mb-4 grid grid-cols-3 gap-2">
-          <div className="rounded-md border border-white/10 bg-panel p-3">
+          <div className="rounded-lg border border-white/[0.06] bg-panel p-3 ring-1 ring-white/[0.03]">
             <p className="text-[11px] text-muted">今月合計</p>
             <p className="mt-1 text-lg font-semibold">{monthlyCost.toFixed(0)}円</p>
           </div>
-          <div className="rounded-md border border-white/10 bg-panel p-3">
+          <div className="rounded-lg border border-white/[0.06] bg-panel p-3 ring-1 ring-white/[0.03]">
             <p className="text-[11px] text-muted">残額</p>
             <p className="mt-1 text-lg font-semibold">{remaining.toFixed(0)}円</p>
           </div>
-          <div className="rounded-md border border-white/10 bg-panel p-3">
+          <div className="rounded-lg border border-white/[0.06] bg-panel p-3 ring-1 ring-white/[0.03]">
             <p className="text-[11px] text-muted">低コスト</p>
             <p className="mt-1 text-lg font-semibold">{state.settings.low_cost_mode ? "ON" : "OFF"}</p>
           </div>
@@ -61,7 +61,7 @@ export function ScenarioListScreen() {
             const characterCount = state.characters.filter((character) => character.scenario_id === scenario.id).length;
             const session = state.sessions.find((item) => item.scenario_id === scenario.id && item.status === "active");
             return (
-              <article key={scenario.id} className="rounded-md border border-white/10 bg-panel p-4 shadow-soft">
+              <article key={scenario.id} className="rounded-xl border border-white/[0.06] bg-gradient-to-b from-panel to-canvas/80 p-4 shadow-soft ring-1 ring-white/[0.03] transition-shadow duration-200 hover:shadow-float">
                 <div className="mb-2 flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <Link href={`/scenarios/${scenario.id}`} className="block">
@@ -111,7 +111,7 @@ export function ScenarioListScreen() {
                   </Link>
                   <button
                     type="button"
-                    className="inline-flex min-h-11 flex-[1.3] items-center justify-center gap-2 rounded-md bg-brand px-3 text-sm font-semibold text-canvas"
+                    className="inline-flex min-h-11 flex-[1.3] items-center justify-center gap-2 rounded-lg bg-gradient-brand px-3 text-sm font-semibold text-canvas shadow-glow-sm transition-all duration-150 active:scale-[0.98]"
                     onClick={() => {
                       const sessionId = session?.id || startOrResumeScenario(scenario.id);
                       router.push(`/play/${sessionId}`);

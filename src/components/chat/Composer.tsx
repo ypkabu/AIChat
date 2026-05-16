@@ -20,7 +20,7 @@ export function Composer({
   showAuxiliaryActions?: boolean;
   onChange: (value: string) => void;
   onSend: () => void;
-  onGenerateImage: (kind: "scene" | "event" | "character") => void;
+  onGenerateImage: (kind: "scene" | "event" | "character" | "icon") => void;
 }) {
   const [open, setOpen] = useState(false);
   const showImageActions = showAuxiliaryActions && imageEnabled;
@@ -30,7 +30,7 @@ export function Composer({
   }, [showAuxiliaryActions]);
 
   return (
-    <div className="border-t border-white/10 bg-canvas/95 px-3 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2 backdrop-blur-xl">
+    <div className="glass-strong border-t border-white/[0.06] px-3 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2">
       {open && showImageActions && (
         <div className="mb-2 grid gap-2 rounded-md border border-white/10 bg-panel p-2">
           <div className="flex items-center justify-between px-1">
@@ -47,6 +47,9 @@ export function Composer({
           </button>
           <button type="button" className="min-h-11 rounded-md bg-panel2 text-sm font-semibold" onClick={() => onGenerateImage("character")}>
             キャラ画像を生成
+          </button>
+          <button type="button" className="min-h-11 rounded-md bg-panel2 text-sm font-semibold" onClick={() => onGenerateImage("icon")}>
+            アイコン画像を生成
           </button>
         </div>
       )}
@@ -71,13 +74,13 @@ export function Composer({
           }}
           rows={1}
           placeholder={allowFreeInput ? "返答を入力" : "自由入力はOFFです"}
-          className="max-h-32 min-h-11 flex-1 resize-none rounded-md border border-white/10 bg-panel2 px-3 py-2.5 text-base leading-6 text-ink outline-none focus:border-brand disabled:opacity-50"
+          className="max-h-32 min-h-11 flex-1 resize-none rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 text-base leading-6 text-ink outline-none transition-all duration-200 focus:border-brand/40 focus:ring-1 focus:ring-brand/20 focus:shadow-glow-sm disabled:opacity-50"
         />
         <button
           type="button"
           disabled={disabled || !value.trim()}
           onClick={onSend}
-          className="grid min-h-11 min-w-11 place-items-center rounded-md bg-brand text-canvas disabled:opacity-40"
+          className="grid min-h-11 min-w-11 place-items-center rounded-lg bg-gradient-brand text-canvas shadow-glow-sm transition-all duration-150 active:scale-95 disabled:opacity-40"
           aria-label="送信"
         >
           {disabled ? <Sparkles className="h-5 w-5 animate-pulse" aria-hidden /> : <Send className="h-5 w-5" aria-hidden />}

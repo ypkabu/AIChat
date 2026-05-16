@@ -1,4 +1,4 @@
-const CACHE_NAME = "story-roleplay-pwa-v2";
+const CACHE_NAME = "story-roleplay-pwa-v3";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/icons/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -39,7 +39,8 @@ self.addEventListener("fetch", (event) => {
   const shouldCache =
     APP_SHELL.includes(url.pathname) ||
     url.pathname.startsWith("/icons/") ||
-    url.pathname.startsWith("/_next/static/");
+    url.pathname.startsWith("/_next/static/") ||
+    url.pathname.startsWith("/models/");
 
   if (!shouldCache) return;
 

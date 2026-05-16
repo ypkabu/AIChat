@@ -234,7 +234,14 @@ export async function POST(request: Request, context: { params: Promise<{ storyI
 
         if (!upstream.ok || !upstream.body) {
           const body = await upstream.text().catch(() => "");
-          send("error", { message: `${providerName} stream error ${upstream.status}`, fallback: true, detail: body.slice(0, 400) });
+          const isOverloaded = upstream.status === 529;
+          send("error", {
+            message: isOverloaded
+              ? "Anthropic APIが混雑しています。しばらく待ってリトライしてください。"
+              : `${providerName} stream error ${upstream.status}`,
+            fallback: !isOverloaded,
+            detail: body.slice(0, 400)
+          });
           send("done", {});
           return;
         }
@@ -254,6 +261,12 @@ export async function POST(request: Request, context: { params: Promise<{ storyI
             sseBuffer = sseBuffer.slice(boundary + 2);
             if (isAnthropic) {
               const event = parseAnthropicSseFrame(frame);
+              if (event?.type === "content_block_start") {
+                const blockType = (event as Record<string, unknown>).content_block;
+                if (blockType && typeof blockType === "object" && (blockType as Record<string, unknown>).type !== "text") {
+                  continue;
+                }
+              }
               if (event?.type === "content_block_delta" && event.delta?.type === "text_delta" && typeof event.delta.text === "string") {
                 consumeOutputText(event.delta.text);
               }

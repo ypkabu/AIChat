@@ -125,8 +125,9 @@ type AppStoreValue = {
   continueAutoTurn: (sessionId: ID, options?: { allowNonAuto?: boolean }) => Promise<void>;
   skipCurrentTurn: () => void;
   setSessionPlayPaceMode: (sessionId: ID, mode: PlayPaceMode) => void;
-  generateImage: (sessionId: ID, prompt: string, triggerType: ImageTriggerType, isNsfwRequested: boolean) => Promise<void>;
+  generateImage: (sessionId: ID, prompt: string, triggerType: ImageTriggerType, isNsfwRequested: boolean) => Promise<ID | null>;
   generateSceneBackground: (sessionId: ID, cue: VisualCue, existingBundleId?: ID | null) => Promise<void>;
+  setImageAsBackground: (sessionId: ID, imageId: ID) => void;
   generateVoice: (sessionId: ID, messageId: ID, characterId: ID | null, content: string) => Promise<void>;
   currentSmartReplies: import("@/lib/domain/types").SmartReply[];
   currentContinueSuggestion: ContinueSuggestion | null;
@@ -1738,9 +1739,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const generateImage = useCallback(
-    async (sessionId: ID, prompt: string, triggerType: ImageTriggerType, isNsfwRequested: boolean) => {
+    async (sessionId: ID, prompt: string, triggerType: ImageTriggerType, isNsfwRequested: boolean): Promise<ID | null> => {
       const session = state.sessions.find((item) => item.id === sessionId);
-      if (!session) return;
+      if (!session) return null;
       if (!isAllowedImageTrigger(triggerType)) throw new Error("この画像生成トリガーは許可されていません。");
       if (!state.settings.image_generation_enabled) throw new Error("画像生成がOFFです。");
       if (triggerType === "manual" && !state.settings.allow_manual_image_generation) throw new Error("手動画像生成がOFFです。");
@@ -1889,6 +1890,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
           ],
           usageLogs: [...current.usageLogs, usage]
         }));
+        return imageId;
       } catch (error) {
         setState((current) => ({
           ...current,
@@ -1907,6 +1909,39 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       }
     },
     [state]
+  );
+
+  const setImageAsBackground = useCallback(
+    (sessionId: ID, imageId: ID) => {
+      const session = state.sessions.find((item) => item.id === sessionId);
+      if (!session) return;
+      const now = nowIso();
+      setState((current) => {
+        const existing = current.sessionSceneVisualStates.find((s) => s.session_id === sessionId);
+        const next: SessionSceneVisualState = {
+          id: existing?.id ?? newId("svs"),
+          session_id: sessionId,
+          current_background_image_id: imageId,
+          location: existing?.location ?? "",
+          time_of_day: existing?.time_of_day ?? "",
+          weather: existing?.weather ?? "",
+          active_characters_json: existing?.active_characters_json ?? [],
+          character_outfits_json: existing?.character_outfits_json ?? {},
+          character_emotions_json: existing?.character_emotions_json ?? {},
+          scene_mood: existing?.scene_mood ?? "",
+          camera_distance: existing?.camera_distance ?? "medium",
+          pov_type: existing?.pov_type ?? "first_person",
+          last_prompt_summary: existing?.last_prompt_summary ?? "",
+          scene_key: existing?.scene_key ?? session.current_scene_key,
+          updated_at: now
+        };
+        return {
+          ...current,
+          sessionSceneVisualStates: upsertSessionVisualState(current.sessionSceneVisualStates, next)
+        };
+      });
+    },
+    [state.sessions]
   );
 
   const generateVoice = useCallback(
@@ -2241,6 +2276,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       setSessionPlayPaceMode,
       generateImage,
       generateSceneBackground,
+      setImageAsBackground,
       generateVoice,
       currentSmartReplies,
       currentContinueSuggestion,
@@ -2276,6 +2312,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       getBundle,
       getSessionBackground,
       isSceneGenerating,
+      setImageAsBackground,
       hydrated,
       rejectMemoryCandidate,
       resetChoicePreferences,

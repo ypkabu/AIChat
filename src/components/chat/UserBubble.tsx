@@ -10,7 +10,7 @@ export function UserBubble({ message }: { message: Message }) {
       <Avatar name={message.speaker_name} src={message.speaker_avatar_url} color="#86a8ff" />
       <div className="min-w-0">
         <p className="mb-1 px-1 text-right text-[11px] text-muted">{message.speaker_name}</p>
-        <div className="relative max-w-[min(72vw,20rem)] whitespace-pre-line break-words rounded-2xl rounded-br-sm bg-brand px-3.5 py-2.5 text-[15px] leading-6 text-canvas shadow-sm [overflow-wrap:anywhere]">
+        <div className="relative max-w-[min(72vw,20rem)] whitespace-pre-line break-words rounded-2xl rounded-br-sm bg-gradient-brand px-3.5 py-2.5 text-[15px] leading-6 text-canvas shadow-glow-brand ring-1 ring-brand/20 [overflow-wrap:anywhere]">
           {content}
           {aiGenerated && <span className="absolute -bottom-2 -right-1 rounded-full bg-panel px-1.5 text-[10px] text-brand">✦</span>}
         </div>

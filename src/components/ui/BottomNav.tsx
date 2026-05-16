@@ -14,7 +14,7 @@ const items = [
 
 export function BottomNav({ active }: { active: "home" | "lorebooks" | "memory" | "gallery" | "settings" }) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-canvas/92 px-3 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2 backdrop-blur-xl">
+    <nav className="glass-strong fixed inset-x-0 bottom-0 z-30 border-t border-white/[0.06] px-3 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-2">
       <div className="mx-auto grid max-w-md grid-cols-5 gap-1">
         {items.map((item) => {
           const Icon = item.icon;
@@ -24,8 +24,8 @@ export function BottomNav({ active }: { active: "home" | "lorebooks" | "memory" 
               key={item.href}
               href={item.href}
               className={cn(
-                "grid min-h-12 place-items-center rounded-md px-1 py-1 text-[10px] text-muted",
-                isActive && "bg-brand/14 text-brand"
+                "grid min-h-12 place-items-center rounded-lg px-1 py-1 text-[10px] text-muted transition-all duration-150",
+                isActive && "bg-brand/14 text-brand shadow-glow-sm ring-1 ring-brand/10"
               )}
             >
               <Icon className="mb-0.5 h-5 w-5" aria-hidden />
