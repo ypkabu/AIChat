@@ -42,7 +42,7 @@ export function AppSettingsScreen() {
 
   return (
     <main className="app-viewport min-h-dvh bg-canvas pb-24 text-ink">
-      <header className="sticky top-0 z-20 border-b border-white/10 bg-canvas/95 px-4 py-3 backdrop-blur-xl">
+      <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-canvas/90 px-4 py-3 shadow-float backdrop-blur-xl">
         <div className="mx-auto max-w-md">
           <h1 className="text-lg font-semibold">設定</h1>
           <p className="text-xs text-muted">運用コスト、NSFW、PWA動作を管理します。</p>
@@ -130,7 +130,7 @@ export function AppSettingsScreen() {
         </div>
 
         {/* ─── 予算 ─── */}
-        <section className="grid gap-3 rounded-md border border-white/10 bg-panel p-4">
+        <section className="grid gap-3 rounded-xl border border-white/[0.06] bg-gradient-to-b from-panel to-canvas/80 p-4 shadow-sm">
           <h2 className="text-sm font-semibold">予算</h2>
           <Field label="月額コスト上限 (円)" type="number" value={state.settings.monthly_budget_jpy} onChange={(value) => updateSettings({ monthly_budget_jpy: Number(value) || 0 })} />
           <Field label="画像枚数上限/日" type="number" value={state.settings.daily_image_limit} onChange={(value) => updateSettings({ daily_image_limit: Number(value) || 0 })} />
@@ -140,7 +140,7 @@ export function AppSettingsScreen() {
         </section>
 
         {/* ─── Story Director ─── */}
-        <section className="grid gap-3 rounded-md border border-white/10 bg-panel p-4">
+        <section className="grid gap-3 rounded-xl border border-white/[0.06] bg-gradient-to-b from-panel to-canvas/80 p-4 shadow-sm">
           <h2 className="text-sm font-semibold">Story Director</h2>
           <ToggleRow
             label="Story Director Debug"
@@ -150,7 +150,7 @@ export function AppSettingsScreen() {
         </section>
 
         {/* ─── 体験モード ─── */}
-        <section className="grid gap-3 rounded-md border border-white/10 bg-panel p-4">
+        <section className="grid gap-3 rounded-xl border border-white/[0.06] bg-gradient-to-b from-panel to-canvas/80 p-4 shadow-sm">
           <h2 className="text-sm font-semibold">体験モード</h2>
           <p className="text-xs text-muted">AI彼女モード: 関係性重視の軽量Story Director。物語モード: 章立て・伏線・フルStory Director。</p>
           <div className="flex gap-2">
@@ -170,7 +170,7 @@ export function AppSettingsScreen() {
         </section>
 
         {/* ─── 3Dキャラクター ─── */}
-        <section className="grid gap-3 rounded-md border border-white/10 bg-panel p-4">
+        <section className="grid gap-3 rounded-xl border border-white/[0.06] bg-gradient-to-b from-panel to-canvas/80 p-4 shadow-sm">
           <h2 className="text-sm font-semibold">3Dキャラクター (VRM)</h2>
           <ToggleRow label="3Dモデル表示を有効にする" checked={settings.vrm_enabled} onChange={(vrm_enabled) => updateSettings({ vrm_enabled })} />
           {settings.vrm_enabled && (
@@ -202,7 +202,7 @@ export function AppSettingsScreen() {
         </section>
 
         {/* ─── 選択傾向学習 ─── */}
-        <section className="grid gap-3 rounded-md border border-white/10 bg-panel p-4">
+        <section className="grid gap-3 rounded-xl border border-white/[0.06] bg-gradient-to-b from-panel to-canvas/80 p-4 shadow-sm">
           <h2 className="text-sm font-semibold">選択傾向学習</h2>
           <p className="text-xs text-muted">選んだ選択肢の傾向を学習し、次回の選択肢生成に反映します。</p>
           <ToggleRow
@@ -249,7 +249,7 @@ export function AppSettingsScreen() {
         </section>
 
         {/* ─── 表示 ─── */}
-        <section className="grid gap-3 rounded-md border border-white/10 bg-panel p-4">
+        <section className="grid gap-3 rounded-xl border border-white/[0.06] bg-gradient-to-b from-panel to-canvas/80 p-4 shadow-sm">
           <h2 className="text-sm font-semibold">表示</h2>
           <ToggleRow
             label="リアルタイム表示"
@@ -281,7 +281,7 @@ export function AppSettingsScreen() {
             onChange={(show_skip_button) => updateSettings({ show_skip_button })}
           />
           <ToggleRow
-            label="本物のストリーミング（実験中）"
+            label="リアルタイムストリーミング"
             checked={state.settings.real_streaming_enabled ?? false}
             onChange={(real_streaming_enabled) => updateSettings({ real_streaming_enabled })}
           />
@@ -293,7 +293,7 @@ export function AppSettingsScreen() {
         </section>
 
         {/* ─── 音声 ─── */}
-        <section className="grid gap-3 rounded-md border border-white/10 bg-panel p-4">
+        <section className="grid gap-3 rounded-xl border border-white/[0.06] bg-gradient-to-b from-panel to-canvas/80 p-4 shadow-sm">
           <h2 className="text-sm font-semibold">音声合成</h2>
           <ToggleRow label="音声合成を有効にする" checked={state.settings.voice_enabled} onChange={(voice_enabled) => updateSettings({ voice_enabled })} />
           <ToggleRow label="自動再生" checked={state.settings.voice_auto_play} onChange={(voice_auto_play) => updateSettings({ voice_auto_play })} />
@@ -316,7 +316,7 @@ export function AppSettingsScreen() {
         </section>
 
         {/* ─── モデル設定 ─── */}
-        <section className="grid gap-3 rounded-md border border-white/10 bg-panel p-4">
+        <section className="grid gap-3 rounded-xl border border-white/[0.06] bg-gradient-to-b from-panel to-canvas/80 p-4 shadow-sm">
           <h2 className="text-sm font-semibold">モデル設定</h2>
 
           {/* プリセット選択 */}
@@ -448,7 +448,7 @@ export function AppSettingsScreen() {
         </section>
 
         {/* ─── NSFW ─── */}
-        <section className="grid gap-2 rounded-md border border-white/10 bg-panel p-4">
+        <section className="grid gap-2 rounded-xl border border-white/[0.06] bg-gradient-to-b from-panel to-canvas/80 p-4 shadow-sm">
           <h2 className="text-sm font-semibold">NSFW</h2>
           <ToggleRow label="成人確認済み" checked={state.settings.adult_confirmed} onChange={(adult_confirmed) => updateSettings({ adult_confirmed })} />
           <ToggleRow label="NSFW会話モード" checked={state.settings.nsfw_chat_enabled} onChange={(nsfw_chat_enabled) => updateSettings({ nsfw_chat_enabled })} />
@@ -458,7 +458,7 @@ export function AppSettingsScreen() {
         </section>
 
         {/* ─── ローカルMVP ─── */}
-        <section className="grid gap-2 rounded-md border border-white/10 bg-panel p-4">
+        <section className="grid gap-2 rounded-xl border border-white/[0.06] bg-gradient-to-b from-panel to-canvas/80 p-4 shadow-sm">
           <h2 className="text-sm font-semibold">ローカルMVP</h2>
           <p className="text-sm leading-6 text-muted">Supabase 未設定時はブラウザ内に保存します。検証用データを初期状態に戻せます。</p>
           <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-danger/30 bg-danger/10 text-sm font-semibold text-danger" onClick={resetLocalState}>
@@ -706,7 +706,7 @@ function ImageProviderFields({
 
 function CostTile({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
   return (
-    <div className={`rounded-md p-3 ${highlight ? "bg-danger/20" : "bg-panel2"}`}>
+    <div className={`rounded-lg p-3 ring-1 ring-white/[0.04] ${highlight ? "bg-danger/20" : "bg-panel2"}`}>
       <p className="text-[11px] text-muted">{label}</p>
       <p className={`mt-1 text-lg font-semibold ${highlight ? "text-danger" : ""}`}>{value.toFixed(0)}円</p>
     </div>

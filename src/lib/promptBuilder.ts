@@ -50,7 +50,7 @@ export function buildConversationPrompt(input: PromptBuildInput): PromptBuildRes
   const latestUserPrompt = buildLatestUserMessage(latestUserInput, inputType, input.selectedChoice);
   const playPaceMode = session.play_pace_mode ?? bundle.style.play_pace_mode ?? "normal";
   const maxAutoCount = Math.min(3, Math.max(1, bundle.style.auto_advance_message_count ?? 3));
-  const maxRecentMessages = 12;
+  const maxRecentMessages = 16;
   const maxLoreItems = settings.low_cost_mode ? 3 : 5;
   const maxMemoryItems = settings.low_cost_mode ? 4 : 8;
   const maxForeshadowingItems = 5;
@@ -106,7 +106,7 @@ export function buildConversationPrompt(input: PromptBuildInput): PromptBuildRes
   const systemPrompt = [
     isGirlfriendMode ? "[AI彼女モード - 優先指示]" : "[STORY DIRECTOR - 最優先指示]",
     isGirlfriendMode
-      ? "このセッションはAI彼女モードです。日常会話・恋愛会話を中心に、キャラクターとの関係構築を重視してください。章・伏線・ビートの厳格な管理より、自然な感情表現と会話の流れを優先してください。"
+      ? "このセッションはAI彼女モードです。恋愛・日常会話を中心に、キャラクターとの関係構築を最優先してください。章・伏線・ビートの厳格な管理より、自然な感情表現と会話の流れを優先。キャラのドキドキ、照れ、嫉妬、甘え、拗ね、距離感の変化を丁寧に描写し、関係が少しずつ深まる実感を与えろ。甘い雰囲気と緊張感のバランスを意識し、単調なイチャイチャの繰り返しを避ける。"
       : `Scene Objective: ${currentScene?.objective || session.scene_objective || bundle.scenario.objective}`,
     ...(!isGirlfriendMode ? [
     `Turn Budget: 残り ${remainingTurns} ターン`,
@@ -305,9 +305,10 @@ function buildOutputStyleRules(outputMode: "json" | "ndjson", inputType: "free_t
     outputFormat,
     "",
     "【文体ルール】",
-    "- ライトノベル風。短文。体言止め多用。",
-    "- 行動描写は三人称。短く鋭く。「耳ぺたん。」「目を逸らす。」「唇を噛んだ。」",
-    "- セリフは口語。キャラの個性が出る話し方にしろ。",
+    "- ライトノベル風・なろう系の文体。短文。体言止め多用。テンポ重視。",
+    "- 行動描写は三人称。短く鋭く。「耳ぺたん。」「目を逸らす。」「唇を噛んだ。」「頬が熱い。」「心臓がうるさい。」",
+    "- 感情描写は五感で伝えろ。「好き」と直接書くな。体の反応、視線、距離、息遣い、温度で表現しろ。",
+    "- セリフは口語。キャラの個性が出る話し方にしろ。言いよどみ、照れ隠し、語尾の変化で感情を滲ませろ。",
     "- 行動描写とセリフを交互に混ぜろ。1つの dialogue/character item 内で \\n で区切れ。",
     "- ナレーションは環境・状況・雰囲気だけ。1〜2文。セリフを入れるな。",
     "- 長い段落を書くな。各 content は最大4行(4つの\\n区切り)まで。",
@@ -315,6 +316,8 @@ function buildOutputStyleRules(outputMode: "json" | "ndjson", inputType: "free_t
     "- 同じキャラが連続で2つの dialogue/character item を出すな。間にナレーションか別キャラを挟め。",
     "- キャラ発言は必ずそのキャラの一人称、呼称、語尾、テンポを守る。サンプル台詞から外れた硬い説明口調や別キャラ風の語尾にしない。",
     "- キャラが知らない hidden_truth や内部メモリを、口調の揺れや独白で漏らさない。",
+    "- 恋愛系: 距離感の変化を丁寧に。ボディランゲージ、視線、沈黙の意味を活用。急に好感度MAXにしない。",
+    "- なろう系: チート・スキル発動シーンはテンポよく。ステータスやスキル名はそのまま使え。周囲の驚きリアクションを入れろ。",
     "",
     buildUserDescriptionRules(inputType),
     "",
@@ -323,9 +326,11 @@ function buildOutputStyleRules(outputMode: "json" | "ndjson", inputType: "free_t
     "- 前のターンと同じ行動描写を使い回すな。",
     "",
     "【展開ルール】",
-    "- 毎ターン必ず1つ以上の新しい情報を入れろ（新キャラ登場/環境変化/伏線提示/関係性変化）。",
+    "- 毎ターン必ず1つ以上の新しい情報を入れろ（新キャラ登場/環境変化/伏線提示/関係性変化/距離感の変化/感情の揺れ）。",
     "- シーン目的に向かって展開を進めろ。同じ場所で足踏みするな。",
-    "- 会話だけで終わらせるな。行動・環境変化・小イベントを混ぜろ。"
+    "- 会話だけで終わらせるな。行動・環境変化・小イベントを混ぜろ。",
+    "- 恋愛シーンでは「告白」「キス」などの大イベントを急がず、その前の緊張・期待・逡巡を丁寧に描け。",
+    "- 異世界/なろう系では、チートの爽快感と周囲のリアクションを両立させろ。説明だけの地の文を長く続けるな。"
   ].join("\n");
 }
 
@@ -501,7 +506,7 @@ function hasNewInformationSignal(message: Message) {
   const text = message.content.trim();
   if (!text) return false;
 
-  return /足音|通知|鍵|手がかり|秘密|伏線|違和感|現れ|割り込|変わ|近づ|離れ|開け|閉め|拾|置い|隠|見つ|気づ|震え|逸ら|噛ん|笑っ|泣|黙っ|止ま|走|鳴っ|揺れ|光っ|影|匂い|冷た|熱/.test(text);
+  return /足音|通知|鍵|手がかり|秘密|伏線|違和感|現れ|割り込|変わ|近づ|離れ|開け|閉め|拾|置い|隠|見つ|気づ|震え|逸ら|噛ん|笑っ|泣|黙っ|止ま|走|鳴っ|揺れ|光っ|影|匂い|冷た|熱|照れ|ドキ|赤く|触れ|握っ|抱き|寄り|距離|胸が|心臓|見つめ|囁|唇|頬|息を|力が|スキル|発動|レベル|魔力|覚醒|進化/.test(text);
 }
 
 function buildForeshadowingPrompt(items: ForeshadowingItem[], currentSceneKey: string) {

@@ -1,10 +1,10 @@
 "use client";
 
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Image as ImageIcon } from "lucide-react";
 import { useState } from "react";
 import type { GeneratedImage } from "@/lib/domain/types";
 
-export function ImageCard({ image }: { image?: GeneratedImage }) {
+export function ImageCard({ image, onSetAsBackground }: { image?: GeneratedImage; onSetAsBackground?: () => void }) {
   const [revealed, setRevealed] = useState(false);
   if (!image) return null;
   const blurred = image.blur_by_default && !revealed;
@@ -29,12 +29,20 @@ export function ImageCard({ image }: { image?: GeneratedImage }) {
       </div>
       <figcaption className="flex items-start justify-between gap-3 px-3 py-2 text-xs leading-5 text-muted">
         <span className="min-w-0 break-words [overflow-wrap:anywhere]">{image.prompt_summary || "イベント画像"}</span>
-        {image.is_nsfw && (
-          <span className="inline-flex items-center gap-1 rounded-sm bg-danger/12 px-2 py-1 text-danger">
-            {blurred ? <EyeOff className="h-3 w-3" aria-hidden /> : null}
-            NSFW
-          </span>
-        )}
+        <span className="flex shrink-0 items-center gap-2">
+          {onSetAsBackground && !blurred && (
+            <button type="button" onClick={onSetAsBackground} className="inline-flex items-center gap-1 rounded-md bg-brand/15 px-2 py-1 text-brand transition-colors hover:bg-brand/25">
+              <ImageIcon className="h-3 w-3" aria-hidden />
+              背景に設定
+            </button>
+          )}
+          {image.is_nsfw && (
+            <span className="inline-flex items-center gap-1 rounded-sm bg-danger/12 px-2 py-1 text-danger">
+              {blurred ? <EyeOff className="h-3 w-3" aria-hidden /> : null}
+              NSFW
+            </span>
+          )}
+        </span>
       </figcaption>
     </figure>
   );

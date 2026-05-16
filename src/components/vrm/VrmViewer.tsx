@@ -258,7 +258,7 @@ export function VrmViewer({
   }, [animate]);
 
   return (
-    <div className={`relative pointer-events-none ${className ?? ""}`}>
+    <div className={`pointer-events-none ${className ?? ""}`}>
       {loading && (
         <div className="absolute inset-0 flex items-end justify-center pb-4">
           <span className="text-xs text-white/40">モデル読み込み中…</span>

@@ -43,12 +43,12 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     <AppStoreProvider>
       {children}
       {waitingWorker && (
-        <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+76px)] z-50 mx-auto flex max-w-md items-center gap-3 rounded-md border border-brand/40 bg-panel px-3 py-2 text-sm text-ink shadow-2xl">
+        <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+76px)] z-50 mx-auto flex max-w-md items-center gap-3 rounded-xl border border-brand/20 bg-panel/90 px-4 py-3 text-sm text-ink shadow-glow-brand backdrop-blur-xl animate-slide-up">
           <span className="min-w-0 flex-1">新しいバージョンがあります。</span>
           <button
             type="button"
             onClick={applyUpdate}
-            className="min-h-9 rounded-md bg-brand px-3 text-xs font-semibold text-canvas"
+            className="min-h-9 rounded-lg bg-gradient-brand px-4 text-xs font-semibold text-canvas shadow-glow-sm transition-all duration-150 active:scale-95"
           >
             更新
           </button>
