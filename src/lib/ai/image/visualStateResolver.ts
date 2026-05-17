@@ -68,16 +68,20 @@ export function resolveVisualState(opts: ResolveOptions): ResolvedVisualState {
   // sceneKey
   const sceneKey = cue.sceneKey?.trim() || environment?.scene_key || "default_scene";
 
-  // location: DBが入っていればそれを優先、空ならcueを使う
-  let location = (environment?.location ?? "").trim();
-  if (!location && cue.location) location = cue.location;
+  // ★ PRIORITY: cue (今ターンのAIが出力した最新情報) > DB状態 (古い可能性あり)
+  // 以前は逆だったため、物語が「カフェ」と書いているのに DB が「学校」のままで
+  // 学校の画像が生成される問題があった。
+  let location = (cue.location ?? "").trim();
+  if (!location && environment?.location) location = environment.location.trim();
   if (cue.location && environment?.location && cue.location !== environment.location) {
-    diagnostics.push(`location_overridden_by_db (cue=${cue.location}, db=${environment.location})`);
+    diagnostics.push(`location_using_cue_over_db (cue=${cue.location}, db=${environment.location})`);
   }
 
-  const timeOfDay = (environment?.time ?? cue.timeOfDay ?? "").toString();
-  const weather = (environment?.weather ?? cue.weather ?? "").toString();
-  const sceneSummary = environment?.scene || environment?.recent_event || cue.promptSummary || "";
+  // 時刻・天候も同様に cue を優先
+  const timeOfDay = (cue.timeOfDay ?? environment?.time ?? "").toString();
+  const weather = (cue.weather ?? environment?.weather ?? "").toString();
+  // sceneSummary も cue を優先（DBの recent_event は古いシーンの可能性）
+  const sceneSummary = cue.promptSummary || environment?.scene || environment?.recent_event || "";
 
   // active characters: DB側の現在登場キャラを優先
   // session_character_states に存在し、かつ characters (scenario_characters) に存在するものをアクティブとみなす
@@ -125,9 +129,11 @@ export function resolveVisualState(opts: ResolveOptions): ResolvedVisualState {
 
   let activeCharacters: VisualActiveCharacter[] = dbActive.map((cs) => {
     const meta = characters.find((c) => c.id === cs.character_id)!;
+    // ★ PRIORITY: cue (今ターンのAIが出力した最新情報) > DB (古い可能性)
+    // 表情: cue優先 → DB mood → null
     const desiredExpr = normalizeExpression(cue.expression);
-    let expr: string | null = (cs.mood && normalizeExpression(cs.mood)) || desiredExpr || null;
-    // 表情差分fallback
+    let expr: string | null = desiredExpr || (cs.mood ? normalizeExpression(cs.mood) : null);
+    // 表情差分fallback (variant が用意済みの表情に合わせる)
     if (desiredExpr && opts.availableExpressions && opts.availableExpressions.length > 0) {
       const chosen = fallbackForExpression(desiredExpr, opts.availableExpressions);
       if (chosen) expr = chosen;
@@ -136,10 +142,13 @@ export function resolveVisualState(opts: ResolveOptions): ResolvedVisualState {
       id: meta.id,
       name: meta.name,
       appearance: meta.appearance,
+      // 服装: DB > cue (服装は変わりにくいのでDB側が信頼できる)
       outfit: cs.outfit || null,
       expression: expr,
-      mood: cs.mood || null,
-      pose: cs.pose || cue.pose || null,
+      // mood: cue > DB
+      mood: (typeof cue.expression === "string" ? cue.expression : null) || cs.mood || null,
+      // ポーズ: cue優先 (「座っている」「立っている」は cue の方が新鮮)
+      pose: cue.pose || cs.pose || null,
       relationshipToUser: cs.relationship || null
     };
   });
@@ -183,6 +192,8 @@ export type BuildFromResolvedOptions = {
   previousImagePromptSummary?: string | null;
   /** OpenAI等の自然言語モデル用プロンプトを使うか */
   useNaturalLanguagePrompt?: boolean;
+  /** ★ 直近の実際の物語テキスト (地の文 + 会話)。画像生成の絶対基準。 */
+  recentNarration?: string | null;
 };
 
 export function buildPromptFromResolved(opts: BuildFromResolvedOptions): BuiltVisualPrompt {
@@ -200,7 +211,8 @@ export function buildPromptFromResolved(opts: BuildFromResolvedOptions): BuiltVi
     qualityPreset: opts.qualityPreset,
     nsfwAllowed: opts.nsfwAllowed,
     previousImagePromptSummary: opts.previousImagePromptSummary ?? null,
-    useNaturalLanguagePrompt: opts.useNaturalLanguagePrompt
+    useNaturalLanguagePrompt: opts.useNaturalLanguagePrompt,
+    recentNarration: opts.recentNarration ?? null
   };
   return buildVisualPrompt(input);
 }

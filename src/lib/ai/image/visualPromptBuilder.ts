@@ -53,6 +53,8 @@ export type BuildVisualPromptInput = {
   previousImagePromptSummary?: string | null;
   /** OpenAI (gpt-image-1/dall-e-3) のような自然言語モデル用に最適化するか */
   useNaturalLanguagePrompt?: boolean;
+  /** ★ 実際の物語テキスト (直近の地の文 + 会話)。これを画像生成の絶対基準とする。 */
+  recentNarration?: string | null;
 };
 
 export type BuiltVisualPrompt = {
@@ -248,13 +250,19 @@ function describeCharacter(char: VisualActiveCharacter): string {
 
 /**
  * 自然言語モデル (gpt-image-1, dall-e-3) 用のプロンプトを生成。
- * タグベースではなく、「絵の注文書」のような自然な指示文を組み立てる。
- * キャラの外見描写を具体的に入れることで一貫性を向上させる。
+ *
+ * ★ 設計方針:
+ *   recentNarration (実際の物語テキスト) を ABSOLUTE TRUTH として最上位に置き、
+ *   メタデータ (location/expression/pose 等) は「物語テキストと矛盾した場合は
+ *   物語テキストを優先せよ」と明示する。これにより:
+ *   - 物語が「カフェで座っている」のに DB が「学校で立っている」でも、画像はカフェで座る
+ *   - 物語に出てこない謎の人物が混入しない
+ *   - 表情が「驚いている」のに metadata が "smile" でも、物語に合わせて驚いた顔になる
  */
 function buildNaturalLanguagePrompt(input: BuildVisualPromptInput): string {
   const parts: string[] = [];
 
-  // 1. 画風指定（先頭で画風を確定させる）
+  // 1. 画風指定（先頭で画風を確定）
   const styleDesc: Record<VisualStyle, string> = {
     anime: "Japanese anime illustration style with clean lines and soft cel-shading",
     visual_novel: "Japanese visual novel CG illustration, clean anime art style with detailed backgrounds",
@@ -265,7 +273,22 @@ function buildNaturalLanguagePrompt(input: BuildVisualPromptInput): string {
   };
   parts.push(styleDesc[input.visualStyle] ?? styleDesc.visual_novel);
 
-  // 2. 構図と視点
+  // 2. ★★★ 最重要 ★★★ 実際の物語テキスト (絶対的な真実の源)
+  // gpt-image-1 は日本語を理解できるので、原文のまま渡す。
+  // これがプロンプト全体で最も強い指示になる。
+  const narration = sanitizeProtagonistMentions(shorten(input.recentNarration ?? "", 800));
+  if (narration) {
+    parts.push(
+      `CRITICAL — ABSOLUTE SOURCE OF TRUTH: This is exactly what is happening in the story RIGHT NOW. ` +
+      `The illustration MUST depict this scene faithfully. Read it carefully and visualize EXACTLY what it describes:\n\n` +
+      `「${narration}」\n\n` +
+      `Pay extreme attention to: where the character is, what they are doing (sitting/standing/walking), ` +
+      `their facial expression and emotion, and the surrounding environment. ` +
+      `If the metadata below contradicts the story text above, IGNORE the metadata and follow the story text.`
+    );
+  }
+
+  // 3. 構図と視点
   parts.push(`First-person point-of-view shot (the viewer is looking at the scene through their own eyes — the viewer's body must NOT appear in the image).`);
   const camDesc: Record<CameraDistance, string> = {
     close: "Close-up framing, showing only face and upper chest",
@@ -275,70 +298,71 @@ function buildNaturalLanguagePrompt(input: BuildVisualPromptInput): string {
   };
   parts.push(camDesc[input.cameraDistance] ?? camDesc.medium);
 
-  // 3. シーン（場所・時間・天候・状況）— 最も重要な情報
+  // 4. シーン (メタデータ。物語と矛盾したら物語が勝つ)
   const sceneParts: string[] = [];
   if (input.location) {
-    sceneParts.push(`Location: ${sanitizeProtagonistMentions(shorten(input.location, 80))}`);
+    sceneParts.push(`Likely location (verify against story above): ${sanitizeProtagonistMentions(shorten(input.location, 80))}`);
   }
   if (input.timeOfDay) {
-    sceneParts.push(`Time: ${sanitizeProtagonistMentions(shorten(input.timeOfDay, 40))}`);
+    sceneParts.push(`Time of day: ${sanitizeProtagonistMentions(shorten(input.timeOfDay, 40))}`);
   }
   if (input.weather) {
     sceneParts.push(`Weather: ${sanitizeProtagonistMentions(shorten(input.weather, 40))}`);
   }
-  if (input.sceneSummary) {
-    const cleaned = sanitizeProtagonistMentions(shorten(input.sceneSummary, 200));
-    if (cleaned) sceneParts.push(`Current scene: ${cleaned}`);
+  if (input.sceneSummary && input.sceneSummary !== input.recentNarration) {
+    const cleaned = sanitizeProtagonistMentions(shorten(input.sceneSummary, 160));
+    if (cleaned) sceneParts.push(`Scene summary: ${cleaned}`);
   }
   if (sceneParts.length > 0) {
     parts.push(sceneParts.join(". "));
   }
 
-  // 4. キャラクター — 外見を具体的に記述（一貫性の要）
+  // 5. キャラクター — 外見描写は一貫性のために必須
   const char = input.activeCharacters[0];
   if (char) {
     const charParts: string[] = [];
-    charParts.push(`In the frame: a single female character named ${char.name}`);
+    charParts.push(`The ONLY character in the frame is a female character named "${char.name}"`);
     if (char.appearance) {
-      // 外見は一貫性のためにフルで入れる（切り詰めない）
-      charParts.push(`Appearance: ${shorten(char.appearance, 250)}`);
+      // 外見はキャラ一貫性の要なので、フルで渡す
+      charParts.push(`Her permanent appearance (consistent across all images): ${shorten(char.appearance, 300)}`);
     }
     if (char.outfit) {
-      charParts.push(`Currently wearing: ${shorten(char.outfit, 120)}`);
+      charParts.push(`Outfit she is currently wearing: ${shorten(char.outfit, 150)}`);
     }
     if (char.expression) {
       const expr = normalizeExpression(String(char.expression)) ?? String(char.expression);
-      charParts.push(`Facial expression: ${expr}`);
+      charParts.push(`Suggested facial expression (override if the story above implies a different emotion): ${expr}`);
     }
     if (char.pose) {
-      charParts.push(`Pose: ${shorten(char.pose, 80)}`);
-    }
-    if (char.mood) {
-      charParts.push(`Mood: ${shorten(char.mood, 50)}`);
+      charParts.push(`Suggested pose (override if the story above describes a different pose): ${shorten(char.pose, 80)}`);
     }
     parts.push(charParts.join(". "));
-    parts.push(`Only ${char.name} appears in the image — no other characters, no male figures.`);
+    parts.push(
+      `STRICT RULE: ONLY ${char.name} appears in this image. Do NOT add any other characters. ` +
+      `Do NOT add male figures. Do NOT add background people unless the story above explicitly mentions them. ` +
+      `If unsure, render only ${char.name} alone.`
+    );
   } else {
-    parts.push("The frame shows only the empty scene — no characters visible.");
+    parts.push("The frame shows only the empty scene with no characters visible.");
   }
 
-  // 5. 画像種別ごとの指示
+  // 6. 画像種別ごとの指示
   if (input.imageKind === "expression_variant") {
-    parts.push("This is an expression update: keep the same outfit and lighting as before, but change the facial expression and body language to match the current narrative moment.");
+    parts.push("This is an expression update: keep the same outfit and overall lighting as the previous image, but change the facial expression and body language to match the current narrative moment from the story text above.");
   } else if (input.imageKind === "event_cg") {
-    parts.push("This is a dramatic key visual for an important story moment. Use dramatic composition, emotional lighting, and polished color grading.");
+    parts.push("This is a dramatic key visual for an important story moment. Use dramatic composition and emotional lighting that matches the mood of the story text above.");
   } else if (input.imageKind === "manual_scene") {
-    parts.push("Illustrate this scene exactly as described.");
+    parts.push("Illustrate the scene exactly as described in the story text above.");
   }
 
-  // 6. 連続性ヒント
+  // 7. 連続性ヒント
   if (input.previousImagePromptSummary) {
-    const cleaned = sanitizeProtagonistMentions(shorten(input.previousImagePromptSummary, 150));
-    if (cleaned) parts.push(`For visual continuity, the previous image showed: ${cleaned}`);
+    const cleaned = sanitizeProtagonistMentions(shorten(input.previousImagePromptSummary, 120));
+    if (cleaned) parts.push(`For visual continuity, the previous image showed: ${cleaned}. Maintain the same character design.`);
   }
 
-  // 7. 品質と制約
-  parts.push("No text, no speech bubbles, no subtitles, no watermarks, no logos in the image.");
+  // 8. 制約
+  parts.push("Absolutely no text, no speech bubbles, no subtitles, no watermarks, no logos in the image.");
 
   return parts.join("\n\n");
 }

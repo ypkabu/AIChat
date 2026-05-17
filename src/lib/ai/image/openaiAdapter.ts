@@ -92,18 +92,22 @@ export class OpenAIImageBackend implements ImageBackend {
       : (request.quality === "high" || request.quality === "ultra" ? "hd" : "standard");
 
     // プロンプト組み立て
-    // gpt-image-1 は negative prompt を直接扱わないので、positive prompt に制約を埋め込む
+    // gpt-image-1 は negative prompt を直接扱わないので、positive prompt の末尾に
+    // 「絶対に含めるな」リストを自然文で追加する。
     let finalPrompt = request.prompt;
     if (isGptImage && request.negativePrompt) {
-      // negative prompt の要素を「避けるべきもの」として自然文で追記
       const negItems = request.negativePrompt
         .split(",")
         .map((s) => s.trim())
         .filter((s) => s.length > 0 && s.length < 60)
-        .slice(0, 10);
+        .slice(0, 12);
       if (negItems.length > 0) {
-        finalPrompt += `. IMPORTANT: Do NOT include: ${negItems.join(", ")}`;
+        finalPrompt += `\n\nSTRICT EXCLUSIONS — these MUST NOT appear in the image under any circumstances: ${negItems.join(", ")}.`;
       }
+    }
+    // gpt-image-1 は最大32,000文字対応だが、安全マージンとして 4000 文字でクリップ
+    if (finalPrompt.length > 4000) {
+      finalPrompt = finalPrompt.slice(0, 3990) + "...";
     }
 
     // API リクエスト
