@@ -559,12 +559,18 @@ const DEFAULT_CONVERSATION_MODEL: Record<string, string> = {
 };
 
 const IMAGE_PROVIDERS = [
-  { value: "mock",    label: "Mock (SVGプレースホルダー)" },
+  { value: "openai",  label: "OpenAI (推奨)" },
   { value: "runpod",  label: "Runpod Serverless" },
-  { value: "comfyui", label: "ComfyUI (ローカル/ngrok)" }
+  { value: "comfyui", label: "ComfyUI (ローカル/ngrok)" },
+  { value: "mock",    label: "Mock (SVGプレースホルダー)" }
 ] as const;
 
 const IMAGE_MODELS: Record<string, Array<{ value: string; label: string }>> = {
+  openai: [
+    { value: "gpt-image-1",  label: "GPT Image 1 — 高精度・推奨" },
+    { value: "dall-e-3",     label: "DALL-E 3 — 安定" },
+    { value: "dall-e-2",     label: "DALL-E 2 — 低コスト" }
+  ],
   mock: [
     { value: "mock-standard-image",      label: "Mock Standard" },
     { value: "mock-private-nsfw-image",  label: "Mock NSFW" }
@@ -586,6 +592,7 @@ const IMAGE_MODELS: Record<string, Array<{ value: string; label: string }>> = {
 };
 
 const DEFAULT_IMAGE_MODEL: Record<string, string> = {
+  openai:  "gpt-image-1",
   mock:    "mock-standard-image",
   runpod:  "black-forest-labs-flux-1-dev",
   comfyui: "illustriousXL_v01.safetensors"

@@ -3,11 +3,13 @@ import { newId } from "@/lib/utils";
 import type { ImageBackend, ImageGenerationRequest, ImageGenerationResponse } from "./types";
 import { RunpodImageBackend } from "./image/runpodAdapter";
 import { ComfyUIImageBackend } from "./image/comfyuiAdapter";
+import { OpenAIImageBackend } from "./image/openaiAdapter";
 
 /**
  * 画像バックエンドを返す。
  *
  * 対応プロバイダー:
+ *   "openai"  — OpenAI gpt-image-1 / dall-e-3。env: OPENAI_API_KEY（推奨）
  *   "runpod"  — Runpod Serverless。env: STANDARD_IMAGE_BACKEND_URL / NSFW_IMAGE_BACKEND_URL / RUNPOD_API_KEY
  *   "comfyui" — ComfyUI (ローカル / ngrok)。env: STANDARD_IMAGE_BACKEND_URL / NSFW_IMAGE_BACKEND_URL
  *   "mock"    — SVGプレースホルダー（デフォルト）
@@ -16,6 +18,17 @@ export function getImageBackend(provider: string, model?: string): ImageBackend 
   const providerId = provider.toLowerCase();
   const modelId = model || provider;
   const isNsfwProvider = providerId.includes("nsfw");
+
+  // OpenAI (gpt-image-1 / dall-e-3)
+  if (providerId === "openai" || providerId.startsWith("openai:")) {
+    const apiKey = process.env.OPENAI_API_KEY ?? "";
+    if (!apiKey) {
+      console.warn("[ImageBackend] OpenAI selected but OPENAI_API_KEY is not set — falling back to mock.");
+      return new MockImageBackend(modelId, isNsfwProvider);
+    }
+    const resolvedModel = modelId === "openai" ? "gpt-image-1" : modelId;
+    return new OpenAIImageBackend(apiKey, resolvedModel, isNsfwProvider);
+  }
 
   if (providerId === "runpod" || providerId.startsWith("runpod:")) {
     const configuredEndpoint = isNsfwProvider

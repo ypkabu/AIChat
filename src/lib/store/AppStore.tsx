@@ -1653,14 +1653,34 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         ? state.images.find((img) => img.id === previousBundle.base_image_id)
         : undefined;
 
+      // 3b) ★ 直近の実際の物語テキストを抽出 (画像生成の絶対基準)
+      // narration + character の発言を時系列順に最新8件取得し、
+      // 「今この瞬間、何が起きているか」を画像生成AIに直接伝える。
+      const recentNarration = state.messages
+        .filter((m) => m.session_id === sessionId)
+        .filter((m) => m.message_type === "narration" || m.message_type === "character" || m.message_type === "user")
+        .slice(-8)
+        .map((m) => {
+          const speaker = m.message_type === "narration" ? "[地の文]"
+            : m.message_type === "user" ? "[ユーザー]"
+            : `[${m.speaker_name || "キャラ"}]`;
+          return `${speaker} ${m.content}`;
+        })
+        .join("\n");
+
       // 4) 新Visual Prompt Builderでpositive/negative/summaryを生成
+      // OpenAI (gpt-image-1/dall-e-3) の場合は自然言語プロンプトを使用
+      const imageProvider = state.settings.standard_image_provider?.toLowerCase() ?? "";
+      const isNaturalLangModel = imageProvider === "openai" || imageProvider.startsWith("openai:");
       const built = buildPromptFromResolved({
         resolved,
         imageKind,
         qualityPreset: quality,
         visualStyle: pickVisualStyle(bundle.style?.prose_style),
         nsfwAllowed: state.settings.adult_confirmed && state.settings.nsfw_image_enabled && session.nsfw_image_enabled,
-        previousImagePromptSummary: previousImage?.prompt_summary ?? null
+        previousImagePromptSummary: previousImage?.prompt_summary ?? null,
+        useNaturalLanguagePrompt: isNaturalLangModel,
+        recentNarration: recentNarration || null
       });
       const prompt = built.positivePrompt;
       const negativePrompt = built.negativePrompt;
